@@ -28,6 +28,8 @@ UNIVERSES = {"coffee": COFFEE_CHAIN, "gold": GOLD_CHAIN}
 
 _MONTHS = {"H": "Mar", "K": "May", "N": "Jul", "U": "Sep", "Z": "Dec",
            "G": "Feb", "J": "Apr", "F": "Jan"}
+MONTH_NUM = {"H": 3, "K": 5, "N": 7, "U": 9, "Z": 12,
+             "G": 2, "J": 4, "F": 1}   # delivery month number per code
 
 
 def contract_label(symbol: str) -> str:
