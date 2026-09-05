@@ -1,0 +1,9 @@
+# local planning artifacts (wayfinder map, tickets, spec) stay out of the repo
+.scratch/
+
+# caches
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.pytest_cache/
+*.egg-info/

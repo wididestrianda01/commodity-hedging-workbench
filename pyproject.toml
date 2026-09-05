@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hedging-workbench"
+version = "0.1.0"
+description = "Commodity Hedging & Structuring Workbench — data gates, carry, hedging, structuring, risk"
+requires-python = ">=3.12"
+dependencies = ["pandas>=2.2", "numpy>=1.26", "scipy>=1.13", "yfinance>=0.2.50"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "jupyter", "nbformat", "nbconvert", "ipykernel"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

@@ -1,0 +1,31 @@
+{
+  "name": "gold",
+  "frozen_at": "2026-09-05T08:50:46.161183+00:00",
+  "start": "2024-01-01",
+  "files": {
+    "GC=F": {
+      "path": "GC_F.csv",
+      "sha256": "e1a7c33e02d94d9ee458491b75f6c8dc52acc302d0ff39789cebd261e534fef2"
+    },
+    "GCG27.CMX": {
+      "path": "GCG27_CMX.csv",
+      "sha256": "81587b52e7a7f07efdb5496ab7a92b4b4b1446b1e2aff1e769b151fdaa31a879"
+    },
+    "GCJ27.CMX": {
+      "path": "GCJ27_CMX.csv",
+      "sha256": "9821fa77d20106631cfb4ea7592ff51b1b89f41ce152a2fea20daabfed4769e0"
+    },
+    "GCK27.CMX": {
+      "path": "GCK27_CMX.csv",
+      "sha256": "51c763bea7e34cb92c90110e90292e42f55f6f30e05e43708388019201183a68"
+    },
+    "GCN27.CMX": {
+      "path": "GCN27_CMX.csv",
+      "sha256": "cd939bb4b2a7ca28acc46c18f638ac70de4303cab47174c3d144236c6bb95ab7"
+    },
+    "GCZ27.CMX": {
+      "path": "GCZ27_CMX.csv",
+      "sha256": "99a1786bc111eb6f8c42decf6b21f4be40f39766108df58a88554e099659890f"
+    }
+  }
+}
