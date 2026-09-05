@@ -1,0 +1,11 @@
+{
+  "name": "rates",
+  "frozen_at": "2026-09-05T09:05:59.927714+00:00",
+  "start": "2024-01-01",
+  "files": {
+    "SOFR": {
+      "path": "SOFR.csv",
+      "sha256": "f8ac6c88191ef6ec0f4eff2eceab46a6419b469d1bf148a1b9fbc95ec402859d"
+    }
+  }
+}
