@@ -34,8 +34,9 @@ def discount(t: float | np.ndarray, r: float) -> float | np.ndarray:
     return np.exp(-r * np.asarray(t, dtype=float))
 
 
-def cva_unilateral(ee: np.ndarray, tenors: np.ndarray, hazard: float,
-                   lgd: float, r: float) -> float:
+def cva_unilateral(
+    ee: np.ndarray, tenors: np.ndarray, hazard: float, lgd: float, r: float
+) -> float:
     """Unilateral CVA (same units as ee) on a bucketed EE profile.
 
     ee[i] pairs with the bucket ENDING at tenors[i]; S starts at 1.

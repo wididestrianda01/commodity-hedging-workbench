@@ -24,20 +24,20 @@ Netting and collateral (12-05) are pure transforms on MtM path arrays:
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from scipy.stats import norm
 
-from hedging_workbench.hedge import DOLLARS_PER_CENT
-from hedging_workbench.pricing import Collar
+from hedging_workbench.conventions import DOLLARS_PER_CENT
+from hedging_workbench.pricing import Collar, black76
+from hedging_workbench.sim import martingale_paths
 
 
 @dataclass(frozen=True)
 class FuturesBook:
     """Long futures book: total contracts, entry price (cents/lb)."""
+
     contracts: float
     entry: float
 
@@ -46,49 +46,32 @@ class FuturesBook:
         return self.contracts * DOLLARS_PER_CENT * (f_paths - self.entry)
 
 
-def simulate_front(f0: float, sigma: float, horizon_years: float,
-                   steps: int, n_paths: int, seed: int = 42) -> np.ndarray:
+def simulate_front(
+    f0: float,
+    sigma: float,
+    horizon_years: float,
+    steps: int,
+    n_paths: int,
+    seed: int = 42,
+) -> np.ndarray:
     """Lognormal martingale paths for the front futures price.
 
     Shape (n_paths, steps+1); column 0 = f0. E[F_t] = f0 by construction.
+    Delegates to the shared engine in sim.martingale_paths.
     """
-    if steps < 1 or n_paths < 1:
-        raise ValueError("need at least one step and path")
-    rng = np.random.default_rng(seed)
-    dt = horizon_years / steps
-    z = rng.standard_normal((n_paths, steps))
-    incr = -0.5 * sigma**2 * dt + sigma * np.sqrt(dt) * z
-    log = np.concatenate([np.zeros((n_paths, 1)), np.cumsum(incr, axis=1)],
-                         axis=1)
-    return f0 * np.exp(log)
+    return martingale_paths(f0, sigma, horizon_years, steps, n_paths, seed)
 
 
-def _b76(kind: str, f: np.ndarray, k: float, t: float, sigma: float,
-         r: float) -> np.ndarray:
-    """Vectorized Black-76 for path repricing.
-
-    Same formula as pricing.black76, which stays scalar for its reuse
-    elsewhere; paths must be priced in bulk, so the identity is
-    duplicated here deliberately and tested against the scalar version
-    (test_exposure: cross-check).
-    """
-    s = sigma * math.sqrt(t)
-    d1 = (np.log(f / k) + 0.5 * sigma**2 * t) / s
-    df = math.exp(-r * t)
-    if kind == "call":
-        return df * (f * norm.cdf(d1) - k * norm.cdf(d1 - s))
-    return df * (k * norm.cdf(s - d1) - f * norm.cdf(-d1))
-
-
-def profile(mtm: np.ndarray, pfe_q: float = 0.95,
-            dt: float = 1 / 252) -> pd.DataFrame:
+def profile(mtm: np.ndarray, pfe_q: float = 0.95, dt: float = 1 / 252) -> pd.DataFrame:
     """EE(t)/PFE(t) profile from MtM paths (n_paths, n_steps+1)."""
     expo = np.maximum(mtm, 0.0)
-    return pd.DataFrame({
-        "t": np.arange(mtm.shape[1]) * dt,
-        "ee": expo.mean(axis=0),
-        "pfe": np.quantile(expo, pfe_q, axis=0),
-    })
+    return pd.DataFrame(
+        {
+            "t": np.arange(mtm.shape[1]) * dt,
+            "ee": expo.mean(axis=0),
+            "pfe": np.quantile(expo, pfe_q, axis=0),
+        }
+    )
 
 
 def epe(prof: pd.DataFrame) -> float:
@@ -97,6 +80,7 @@ def epe(prof: pd.DataFrame) -> float:
 
 
 # -- 12-05: netting and collateral -------------------------------------------
+
 
 def netted_mtm(paths: list[np.ndarray]) -> np.ndarray:
     """Elementwise sum of position MtM paths (ISDA netting-set view)."""
@@ -110,8 +94,7 @@ def netted_mtm(paths: list[np.ndarray]) -> np.ndarray:
     return out
 
 
-def collateralized(mtm: np.ndarray, threshold: float, ia: float = 0.0
-                   ) -> np.ndarray:
+def collateralized(mtm: np.ndarray, threshold: float, ia: float = 0.0) -> np.ndarray:
     """Exposure after collateral: max(V - (IA + threshold), 0).
 
     VM is tracked implicitly by the threshold/IA haircut — the junior
@@ -121,8 +104,14 @@ def collateralized(mtm: np.ndarray, threshold: float, ia: float = 0.0
     return np.maximum(mtm - (ia + threshold), 0.0)
 
 
-def collar_book_mtm(contracts: float, collar: Collar, f_paths: np.ndarray,
-                    t_ttm: np.ndarray, sigma: float, r: float) -> np.ndarray:
+def collar_book_mtm(
+    contracts: float,
+    collar: Collar,
+    f_paths: np.ndarray,
+    t_ttm: np.ndarray,
+    sigma: float,
+    r: float,
+) -> np.ndarray:
     """MtM paths of long futures + long put + short call (collar wrap).
 
     t_ttm: remaining time to each column's option expiry (years), same
@@ -134,7 +123,7 @@ def collar_book_mtm(contracts: float, collar: Collar, f_paths: np.ndarray,
         if t_ttm[j] <= 0:
             continue
         f = f_paths[:, j]
-        put = _b76("put", f, collar.put_strike, t_ttm[j], sigma, r)
-        call = _b76("call", f, collar.call_strike, t_ttm[j], sigma, r)
+        put = black76("put", f, collar.put_strike, t_ttm[j], sigma, r)
+        call = black76("call", f, collar.call_strike, t_ttm[j], sigma, r)
         opt[:, j] = contracts * DOLLARS_PER_CENT * (put - call)
     return fut + opt

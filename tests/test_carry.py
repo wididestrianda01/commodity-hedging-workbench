@@ -6,19 +6,32 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hedging_workbench.carry import (curve_state, expiry, implied_carry,
-                                     implied_yield, load_curve,
-                                     yield_term_structure)
-from hedging_workbench.data.rates import latest_rate
+from hedging_workbench.carry import (
+    curve_state,
+    expiry,
+    implied_carry,
+    implied_yield,
+    load_curve,
+    yield_term_structure,
+)
+from hedging_workbench.data.frozen import latest_rate
+
 
 def synth_curve(prices, start_year=2026):
     """Synthetic chain as a curve DataFrame (expiry, price, ttm)."""
-    expiries = pd.date_range(f"{start_year}-09-15", periods=len(prices),
-                             freq="MS") + pd.Timedelta(days=14)
+    expiries = pd.date_range(
+        f"{start_year}-09-15", periods=len(prices), freq="MS"
+    ) + pd.Timedelta(days=14)
     ttm = (expiries - expiries[0]).days / 365.25
-    return pd.DataFrame({"price": prices, "expiry": expiries, "ttm": ttm,
-                         "symbol": [f"C{i}" for i in range(len(prices))],
-                         "label": [f"m{i}" for i in range(len(prices))]})
+    return pd.DataFrame(
+        {
+            "price": prices,
+            "expiry": expiries,
+            "ttm": ttm,
+            "symbol": [f"C{i}" for i in range(len(prices))],
+            "label": [f"m{i}" for i in range(len(prices))],
+        }
+    )
 
 
 def test_carry_identity_exact():
@@ -49,7 +62,7 @@ def test_real_coffee_curve_backwardated():
     assert curve["ttm"].iloc[0] > 0
     ts = yield_term_structure(curve, r=latest_rate())
     assert len(ts) == 7
-    assert ts["carry"].mean() < 0          # phase-1 finding: backwardation
+    assert ts["carry"].mean() < 0  # phase-1 finding: backwardation
     assert (ts["implied_yield"] > ts.attrs["r"]).all()
     assert curve_state(ts) == "backwardation"
 

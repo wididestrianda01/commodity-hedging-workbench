@@ -25,9 +25,9 @@ GRID = np.round(np.linspace(0.0, 2.0, 201), 4)
 
 @dataclass
 class CvarResult:
-    ratio: float            # optimal h (contracts per unit of exposure)
-    cvar: float             # CVaR at the optimum
-    cvar_unhedged: float    # CVaR at h = 0
+    ratio: float  # optimal h (contracts per unit of exposure)
+    cvar: float  # CVaR at the optimum
+    cvar_unhedged: float  # CVaR at h = 0
     alpha: float
 
 
@@ -38,11 +38,16 @@ def cvar(losses: np.ndarray, alpha: float = 0.95) -> float:
     return float(l[-n_tail:].mean())
 
 
-def cvar_optimal_ratio(item_moves, futures_moves, alpha: float = 0.95,
-                       grid=GRID) -> CvarResult:
+def cvar_optimal_ratio(
+    item_moves, futures_moves, alpha: float = 0.95, grid=GRID
+) -> CvarResult:
     """Grid search h minimising CVaR of (Δitem - h·Δfutures) losses."""
     d_item = np.asarray(item_moves, dtype=float)
     d_fut = np.asarray(futures_moves, dtype=float)
     best = min(grid, key=lambda h: cvar(d_item - h * d_fut, alpha))
-    return CvarResult(ratio=float(best), cvar=cvar(d_item - best * d_fut, alpha),
-                      cvar_unhedged=cvar(d_item, alpha), alpha=alpha)
+    return CvarResult(
+        ratio=float(best),
+        cvar=cvar(d_item - best * d_fut, alpha),
+        cvar_unhedged=cvar(d_item, alpha),
+        alpha=alpha,
+    )

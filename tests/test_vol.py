@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hedging_workbench.vol import EWMA_LAMBDA, garch_vol, vol_from_frozen
+from hedging_workbench.vol import EWMA_LAMBDA, vol_from_frozen
 
 
 def test_ewma_hand_recursion():
@@ -13,7 +13,7 @@ def test_ewma_hand_recursion():
     lam = EWMA_LAMBDA
     manual = r.iloc[0] ** 2
     for x in r.iloc[1:]:
-        manual = lam * manual + (1 - lam) * x ** 2
+        manual = lam * manual + (1 - lam) * x**2
     ewma = float(r.pow(2).ewm(alpha=1 - lam, adjust=False).mean().iloc[-1])
     assert ewma == pytest.approx(manual, rel=1e-10)
 

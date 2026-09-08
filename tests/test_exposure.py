@@ -3,31 +3,25 @@
 import numpy as np
 import pytest
 
-from hedging_workbench.exposure import (FuturesBook, _b76, collar_book_mtm,
-                                        collateralized, epe, netted_mtm,
-                                        profile, simulate_front)
-from hedging_workbench.pricing import black76, zero_cost_collar
+from hedging_workbench.exposure import (
+    FuturesBook,
+    collar_book_mtm,
+    collateralized,
+    epe,
+    netted_mtm,
+    profile,
+    simulate_front,
+)
+from hedging_workbench.pricing import zero_cost_collar
 
 F0, SIG = 300.0, 0.385
 CONTRACTS = 10.0
 BOOK = FuturesBook(CONTRACTS, F0)
 
 
-def test_vectorized_black76_matches_scalar():
-    """The path-pricing duplicate is the same function as pricing.black76."""
-    rng = np.random.default_rng(0)
-    f = F0 * np.exp(rng.normal(0, 0.2, 1000))
-    for kind in ("call", "put"):
-        vec = _b76(kind, f, 290.0, 0.25, SIG, 0.0366)
-        scal = np.array([black76(kind, x, 290.0, 0.25, SIG, 0.0366)
-                         for x in f[:20]])
-        assert np.allclose(vec[:20], scal)
-
-
 def test_martingale_mean_is_preserved():
     """E[F_t] = f0 at every grid time — the Q-measure premise."""
-    f = simulate_front(F0, SIG, horizon_years=0.25, steps=60,
-                       n_paths=200_000, seed=11)
+    f = simulate_front(F0, SIG, horizon_years=0.25, steps=60, n_paths=200_000, seed=11)
     assert f.shape == (200_000, 61)
     assert np.allclose(f[:, 0], F0)
     assert np.allclose(f.mean(axis=0), F0, rtol=0.02)
@@ -63,6 +57,7 @@ def test_epe_stabilizes_with_path_count():
 
 
 # -- 12-05 -------------------------------------------------------------------
+
 
 def _same_shape(sigma=SIG):
     return simulate_front(F0, sigma, 0.25, 50, 30_000, seed=9)

@@ -52,8 +52,7 @@ def test_ql_benchmark_matched_case():
     ref = ql.Date(15, ql.January, 2026)
     ql.Settings.instance().evaluationDate = ref
     cal, dc = ql.NullCalendar(), ql.Actual365Fixed()
-    hazard_curve = ql.FlatHazardRate(
-        0, cal, ql.QuoteHandle(ql.SimpleQuote(HAZ)), dc)
+    hazard_curve = ql.FlatHazardRate(0, cal, ql.QuoteHandle(ql.SimpleQuote(HAZ)), dc)
     df_curve = ql.FlatForward(0, cal, ql.QuoteHandle(ql.SimpleQuote(R)), dc)
 
     tenors = np.array([0.25, 0.5, 1.0, 2.0])

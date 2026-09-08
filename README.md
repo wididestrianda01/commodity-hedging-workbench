@@ -27,8 +27,10 @@ jupyter nbconvert --to notebook --execute notebooks/00_mqa_replication.ipynb
 Refresh frozen data (throttled Yahoo download):
 
 ```bash
-python -m hedging_workbench.data.download --universe coffee --start 2024-01-01
-python -m hedging_workbench.data.download --universe gold   --start 2024-01-01
+python -m hedging_workbench.data.frozen --universe coffee --start 2024-01-01
+python -m hedging_workbench.data.frozen --universe gold   --start 2024-01-01
+python -m hedging_workbench.data.frozen --rates                # SOFR snapshot
+python -m hedging_workbench.data.frozen --verify               # checksums
 ```
 
 ## Data policy

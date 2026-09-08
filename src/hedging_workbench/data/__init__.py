@@ -3,4 +3,4 @@
 from hedging_workbench.data.gates import GateError, GateReport, evaluate
 from hedging_workbench.data.universe import UNIVERSES
 
-__all__ = ["GateError", "GateReport", "evaluate", "UNIVERSES"]
+__all__ = ["UNIVERSES", "GateError", "GateReport", "evaluate"]

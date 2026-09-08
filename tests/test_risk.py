@@ -3,7 +3,6 @@
 Hand-computed on a constructed discrete distribution plus invariants.
 """
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -38,6 +37,7 @@ def test_es_strictly_exceeds_var_when_tail_is_fat():
 def test_es_ge_var_invariant_on_real_data():
     """Frozen KC=F daily returns: invariant holds, numbers plausible."""
     from hedging_workbench.vol import vol_from_frozen
+
     rets, _ = vol_from_frozen()
     out = var_es(rets / 100.0)
     assert (out["es"] >= out["var"]).all()

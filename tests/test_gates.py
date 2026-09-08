@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from hedging_workbench.data import gates as G
-from hedging_workbench.data.download import sha256_file, verify_manifest
+from hedging_workbench.data.frozen import sha256_file, verify
 
 
 def make_series(n=300, price=300.0, seed=0):
@@ -17,14 +17,16 @@ def make_series(n=300, price=300.0, seed=0):
 
 
 def test_gates_pass_on_clean_coffee():
-    report = G.run_gates({"KC=F": make_series(), "KCH27.NYB": make_series(seed=1)},
-                         "coffee")
+    report = G.run_gates(
+        {"KC=F": make_series(), "KCH27.NYB": make_series(seed=1)}, "coffee"
+    )
     assert report.ok and not report.fallback_used and not report.failures
 
 
 def test_gate_fails_on_short_series():
-    report = G.run_gates({"KC=F": make_series(), "KCH27.NYB": make_series(n=10)},
-                         "coffee")
+    report = G.run_gates(
+        {"KC=F": make_series(), "KCH27.NYB": make_series(n=10)}, "coffee"
+    )
     assert not report.ok
     assert any("KCH27.NYB" in f and "rows" in f for f in report.failures)
 
@@ -54,9 +56,9 @@ def test_fail_closed_when_both_universes_fail():
 def test_manifest_tamper_detected(tmp_path):
     f = tmp_path / "KC_F.csv"
     f.write_text("date,close\n2024-01-02,300.0\n")
-    (tmp_path / "manifest_coffee.json").write_text(json.dumps(
-        {"files": {"KC=F": {"path": "KC_F.csv",
-                            "sha256": sha256_file(f)}}}))
-    assert verify_manifest(tmp_path, "coffee") == []
-    f.write_text("date,close\n2024-01-02,999.0\n")   # tamper
-    assert verify_manifest(tmp_path, "coffee") == ["KC=F"]
+    (tmp_path / "manifest_coffee.json").write_text(
+        json.dumps({"files": {"KC=F": {"path": "KC_F.csv", "sha256": sha256_file(f)}}})
+    )
+    assert verify("coffee", tmp_path) == []
+    f.write_text("date,close\n2024-01-02,999.0\n")  # tamper
+    assert verify("coffee", tmp_path) == ["KC=F"]

@@ -43,9 +43,14 @@ def _pearson(x: np.ndarray, y: np.ndarray) -> float:
     return float(np.corrcoef(x, y)[0, 1])
 
 
-def assess(hypothetical_pnl, hedged_item_pnl, market_pnl=None,
-           credit_pnl=None, designated_ratio: float = 1.0,
-           actual_ratio: float = 1.0) -> Effectiveness:
+def assess(
+    hypothetical_pnl,
+    hedged_item_pnl,
+    market_pnl=None,
+    credit_pnl=None,
+    designated_ratio: float = 1.0,
+    actual_ratio: float = 1.0,
+) -> Effectiveness:
     """Run the three IFRS 9 principles on one assessment window.
 
     hypothetical_pnl / hedged_item_pnl: P&L series of the hypothetical
@@ -77,9 +82,16 @@ def assess(hypothetical_pnl, hedged_item_pnl, market_pnl=None,
     if corr < CORR_MIN:
         reasons.append(f"economic relationship weak (corr {corr:.2f} < {CORR_MIN})")
     if credit_share > CREDIT_MAX_SHARE:
-        reasons.append(f"credit dominance (share {credit_share:.2f} > {CREDIT_MAX_SHARE})")
+        reasons.append(
+            f"credit dominance (share {credit_share:.2f} > {CREDIT_MAX_SHARE})"
+        )
     if ratio_dev > RATIO_TOL:
         reasons.append(f"hedge ratio drifted {ratio_dev:.0%} from designation")
-    return Effectiveness(correlation=corr, dollar_offset=offset,
-                         credit_share=credit_share, ratio_deviation=ratio_dev,
-                         effective=not reasons, reasons=reasons)
+    return Effectiveness(
+        correlation=corr,
+        dollar_offset=offset,
+        credit_share=credit_share,
+        ratio_deviation=ratio_dev,
+        effective=not reasons,
+        reasons=reasons,
+    )

@@ -16,8 +16,9 @@ def test_synthetic_recovery():
     """A curve generated from known parameters refits to them (exact, no noise)."""
     ttms = np.array([0.03, 0.28, 0.53, 0.78, 1.03, 1.28, 1.53, 1.78])
     true = dict(chi=0.08, xi=5.70, kappa=2.0, slope=-0.09)
-    ln_f = (true["chi"] * np.exp(-true["kappa"] * ttms) + true["xi"]
-            + true["slope"] * ttms)
+    ln_f = (
+        true["chi"] * np.exp(-true["kappa"] * ttms) + true["xi"] + true["slope"] * ttms
+    )
     fit = fit_curve(ss_curve(ln_f, ttms))
     assert fit.converged
     assert fit.chi == pytest.approx(true["chi"], abs=1e-5)
@@ -32,10 +33,10 @@ def test_real_fit_converges_and_is_backwardated():
     positive long-run price; thin identification surfaced as wide kappa SE."""
     curve, fit, ts = fit_from_frozen("coffee")
     assert fit.converged
-    assert fit.rmse < 0.05                     # <5% log misfit on 8 points
-    assert fit.slope < 0                       # backwardation drift
-    assert 0 < fit.long_run_price < 1e4        # cents/lb sanity
-    assert fit.se["kappa"] > 0                 # uncertainty reported
+    assert fit.rmse < 0.05  # <5% log misfit on 8 points
+    assert fit.slope < 0  # backwardation drift
+    assert 0 < fit.long_run_price < 1e4  # cents/lb sanity
+    assert fit.se["kappa"] > 0  # uncertainty reported
     assert len(curve) == 8 and len(ts) == 7
 
 

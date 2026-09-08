@@ -16,8 +16,7 @@ from __future__ import annotations
 import pandas as pd
 
 
-def var_es(pnl: pd.Series, levels: tuple[float, ...] = (0.95, 0.99)
-           ) -> pd.DataFrame:
+def var_es(pnl: pd.Series, levels: tuple[float, ...] = (0.95, 0.99)) -> pd.DataFrame:
     """Historical VaR and ES at each confidence level. Index: level."""
     pnl = pd.Series(pnl).dropna()
     if pnl.empty:
@@ -28,9 +27,7 @@ def var_es(pnl: pd.Series, levels: tuple[float, ...] = (0.95, 0.99)
             raise ValueError(f"confidence level {q} outside (0.5, 1)")
         tail_cut = pnl.quantile(1 - q)
         tail = pnl[pnl <= tail_cut]
-        rows.append({"level": q,
-                     "var": -tail_cut,
-                     "es": -tail.mean()})
+        rows.append({"level": q, "var": -tail_cut, "es": -tail.mean()})
     out = pd.DataFrame(rows).set_index("level")
     bad = out[out["es"] < out["var"] - 1e-12]
     if not bad.empty:

@@ -11,8 +11,7 @@ import pytest
 from hedging_workbench.note import ParticipationNote, render_governance
 
 F0, R, T, SIG = 300.0, 0.0366, 1.0, 0.385
-NOTE = ParticipationNote(notional=1_000_000, f0=F0, tenor=T,
-                         participation=0.6)
+NOTE = ParticipationNote(notional=1_000_000, f0=F0, tenor=T, participation=0.6)
 
 
 def test_closed_form_decomposition():
@@ -23,6 +22,7 @@ def test_closed_form_decomposition():
     assert cf["price"] == pytest.approx(bond + 0.6 * cf["call"])
     # and the call fraction matches pricing.black76 directly
     from hedging_workbench.pricing import black76
+
     assert cf["call"] == pytest.approx(black76("call", F0, F0, T, SIG, R) / F0)
 
 
@@ -72,10 +72,12 @@ def test_greeks_analytic_and_direction():
     g = NOTE.greeks(SIG, R)
     assert g["delta"] < 0 and g["vega"] < 0
     h = 1e-3
-    up = ParticipationNote(1, F0 * (1 + h), T, 0.6, strike=F0)\
-        .closed_form(SIG, R)["price"]
-    dn = ParticipationNote(1, F0 * (1 - h), T, 0.6, strike=F0)\
-        .closed_form(SIG, R)["price"]
+    up = ParticipationNote(1, F0 * (1 + h), T, 0.6, strike=F0).closed_form(SIG, R)[
+        "price"
+    ]
+    dn = ParticipationNote(1, F0 * (1 - h), T, 0.6, strike=F0).closed_form(SIG, R)[
+        "price"
+    ]
     up = NOTE.closed_form(SIG + h, R)["price"]
     dn = NOTE.closed_form(SIG - h, R)["price"]
     assert -g["vega"] == pytest.approx((up - dn) / (2 * h), rel=1e-4)

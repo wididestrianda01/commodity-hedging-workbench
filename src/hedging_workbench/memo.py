@@ -8,10 +8,10 @@ not asserted as satisfied — the memo says so.
 
 from __future__ import annotations
 
-from hedging_workbench.hedge import CONTRACT_LB
+from hedging_workbench.conventions import CONTRACT_LB
 
-def designation_memo(prog, f0: float, collar=None,
-                     usd_eur: float = 1.08) -> str:
+
+def designation_memo(prog, f0: float, collar=None, usd_eur: float = 1.08) -> str:
     """Render the designation memo. prog: HedgeProgram; f0 in cents/lb."""
     exp = prog.exposure
     total_lb = float(exp["volume_lb"].sum())
@@ -19,11 +19,12 @@ def designation_memo(prog, f0: float, collar=None,
     notional_eur = notional_usd / usd_eur
     emir_threshold_eur = 3e9
     instrument = "long coffee C futures (ICE KC)" + (
-        " with zero-cost collar (long put / short call)" if collar else "")
+        " with zero-cost collar (long put / short call)" if collar else ""
+    )
     lines = [
         "# IFRS 9 Cash-Flow Hedge Designation Memo",
         "",
-        f"**Archetype:** coffee roaster/buyer (Starbucks FY2025 10-K template)",
+        "**Archetype:** coffee roaster/buyer (Starbucks FY2025 10-K template)",
         f"**Program horizon:** {exp['month'].iloc[0]:%b %Y} – {exp['month'].iloc[-1]:%b %Y} "
         f"({len(exp)} monthly purchases, {total_lb:,.0f} lb total, "
         f"{total_lb / CONTRACT_LB:.2f} contract-equivalents)",
@@ -61,10 +62,10 @@ def designation_memo(prog, f0: float, collar=None,
         f"{notional_eur / emir_threshold_eur:.4%} of threshold → below-threshold "
         f"NFC: clearing obligation does not apply; risk-mitigation techniques "
         f"(variance margin) apply only above thresholds.",
-        f"- Hedging exemption (RTS 21a criteria): positions that objectively "
-        f"reduce commercial risk are exempt from position-limit and certain "
-        f"reporting considerations — the program's designation memo and "
-        f"purchase schedule are the objective evidence.",
+        "- Hedging exemption (RTS 21a criteria): positions that objectively "
+        "reduce commercial risk are exempt from position-limit and certain "
+        "reporting considerations — the program's designation memo and "
+        "purchase schedule are the objective evidence.",
         "",
         "## Honest-framing note",
         "",

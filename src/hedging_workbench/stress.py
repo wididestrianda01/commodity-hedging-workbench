@@ -23,18 +23,21 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from hedging_workbench.hedge import (INITIAL_MARGIN_PER_CONTRACT,
-                                     variation_margin)
 
-def stressed_path(base: pd.Series, shock_annual: float,
-                  horizon_days: int = 63) -> pd.Series:
+from hedging_workbench.conventions import DOLLARS_PER_CENT, INITIAL_MARGIN_PER_CONTRACT
+from hedging_workbench.hedge import variation_margin
+
+
+def stressed_path(
+    base: pd.Series, shock_annual: float, horizon_days: int = 63
+) -> pd.Series:
     """Business-day path from (and including) the frozen as-of date under a
     constant annualised shock. The base's last price anchors day 0 so the
     margin engine sees the full move from the as-of mark."""
     last = float(base.iloc[-1])
     idx = pd.DatetimeIndex([base.index[-1]]).append(
-        pd.bdate_range(base.index[-1] + pd.Timedelta(days=1),
-                       periods=horizon_days))
+        pd.bdate_range(base.index[-1] + pd.Timedelta(days=1), periods=horizon_days)
+    )
     t = np.arange(0, horizon_days + 1) / 252.0
     return pd.Series(last * np.exp(shock_annual * t), index=idx)
 
@@ -43,28 +46,39 @@ def stressed_path(base: pd.Series, shock_annual: float,
 class StressResult:
     scenario: str
     shock_annual: float
-    peak_need_usd: float          # futures program: max drawdown below start
+    peak_need_usd: float  # futures program: max drawdown below start
     peak_date: pd.Timestamp
     collar_peak_need_usd: float | None = None
-    buffer_usd: float | None = None   # vs reference collateral, futures peak
+    buffer_usd: float | None = None  # vs reference collateral, futures peak
 
-def run_scenario(contracts: float, base: pd.Series, shock_annual: float,
-                 scenario: str, collar=None,
-                 initial_margin: float = INITIAL_MARGIN_PER_CONTRACT,
-                 collateral_usd: float | None = None,
-                 horizon_days: int = 63) -> StressResult:
+
+def run_scenario(
+    contracts: float,
+    base: pd.Series,
+    shock_annual: float,
+    scenario: str,
+    collar=None,
+    initial_margin: float = INITIAL_MARGIN_PER_CONTRACT,
+    collateral_usd: float | None = None,
+    horizon_days: int = 63,
+) -> StressResult:
     """One stressed path -> margin profiles for futures (and collar)."""
     path = stressed_path(base, shock_annual, horizon_days)
     vm = variation_margin(contracts, path, initial_margin)
     start = initial_margin * abs(contracts)
     dd = start - vm["balance_usd"]
     peak_i = dd.idxmax()
-    res = StressResult(scenario=scenario, shock_annual=shock_annual,
-                       peak_need_usd=float(dd.max()), peak_date=peak_i,
-                       buffer_usd=(collateral_usd - float(dd.max())
-                                   if collateral_usd is not None else None))
+    res = StressResult(
+        scenario=scenario,
+        shock_annual=shock_annual,
+        peak_need_usd=float(dd.max()),
+        peak_date=peak_i,
+        buffer_usd=(
+            collateral_usd - float(dd.max()) if collateral_usd is not None else None
+        ),
+    )
     if collar is not None:
-        usd = contracts * 375.0
+        usd = contracts * DOLLARS_PER_CENT
         put_intrinsic = (collar.put_strike - path).clip(lower=0.0) * usd
         # premium paid upfront reduces the starting position; net balance
         # floored by the strike protection (see module docstring)
@@ -76,15 +90,30 @@ def run_scenario(contracts: float, base: pd.Series, shock_annual: float,
     return res
 
 
-def stress_report(contracts: float, base: pd.Series, sigma_annual: float,
-                  collar=None, collateral_usd: float | None = None,
-                  horizon_days: int = 63) -> list[StressResult]:
+def stress_report(
+    contracts: float,
+    base: pd.Series,
+    sigma_annual: float,
+    collar=None,
+    collateral_usd: float | None = None,
+    horizon_days: int = 63,
+) -> list[StressResult]:
     """Full scenario set: -1s/-2s/+2s from the GARCH vol + backwardation widening."""
-    shocks = [(-1.0 * sigma_annual, "down_1sigma"),
-              (-2.0 * sigma_annual, "down_2sigma"),
-              (+2.0 * sigma_annual, "up_2sigma"),
-              (-1.5 * sigma_annual, "backwardation_widening")]
-    return [run_scenario(contracts, base, s, name, collar,
-                         collateral_usd=collateral_usd,
-                         horizon_days=horizon_days)
-            for s, name in shocks]
+    shocks = [
+        (-1.0 * sigma_annual, "down_1sigma"),
+        (-2.0 * sigma_annual, "down_2sigma"),
+        (+2.0 * sigma_annual, "up_2sigma"),
+        (-1.5 * sigma_annual, "backwardation_widening"),
+    ]
+    return [
+        run_scenario(
+            contracts,
+            base,
+            s,
+            name,
+            collar,
+            collateral_usd=collateral_usd,
+            horizon_days=horizon_days,
+        )
+        for s, name in shocks
+    ]

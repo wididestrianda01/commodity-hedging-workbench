@@ -37,12 +37,12 @@ BIG = 1e10
 
 @dataclass
 class BekkFit:
-    C: np.ndarray        # lower-triangular 2x2 intercept (from targeting)
-    A: np.ndarray        # 2x2
-    B: np.ndarray        # 2x2
+    C: np.ndarray  # lower-triangular 2x2 intercept (from targeting)
+    A: np.ndarray  # 2x2
+    B: np.ndarray  # 2x2
     loglikelihood: float
-    stationary: bool     # spectral radius of A(x)A + B(x)B < 1
-    H: np.ndarray        # (T, 2, 2) conditional covariances
+    stationary: bool  # spectral radius of A(x)A + B(x)B < 1
+    H: np.ndarray  # (T, 2, 2) conditional covariances
 
     def hedge_ratio(self) -> pd.Series:
         """h_t = H12 / H22 per period, burn-in observations removed."""
@@ -64,14 +64,13 @@ def _target_C(A: np.ndarray, B: np.ndarray, S: np.ndarray) -> np.ndarray:
         return None
 
 
-def _recurse(r: np.ndarray, c00, c01, c11, a11, a12, a21, a22,
-             b11, b12, b21, b22):
+def _recurse(r: np.ndarray, c00, c01, c11, a11, a12, a21, a22, b11, b12, b21, b22):
     """Scalar 2x2 BEKK recursion. Returns (T, 2, 2) array of H_t."""
     T = len(r)
     H = np.empty((T, 2, 2))
     h00, h01, h11 = c00 * c00, c00 * c01, c01 * c01 + c11 * c11
     for t in range(T):
-        e0, e1 = (r[t - 1] if t > 0 else (0.0, 0.0))
+        e0, e1 = r[t - 1] if t > 0 else (0.0, 0.0)
         u0 = a11 * e0 + a12 * e1
         u1 = a21 * e0 + a22 * e1
         m00 = b11 * h00 + b12 * h01
@@ -102,7 +101,7 @@ def _neg_loglik(theta8: np.ndarray, r: np.ndarray, S: np.ndarray) -> float:
     h00, h01, h11 = c00 * c00, c00 * c01, c01 * c01 + c11 * c11
     total = 0.0
     for t in range(len(r)):
-        e0, e1 = (r[t - 1] if t > 0 else (0.0, 0.0))
+        e0, e1 = r[t - 1] if t > 0 else (0.0, 0.0)
         u0 = a11 * e0 + a12 * e1
         u1 = a21 * e0 + a22 * e1
         m00 = b11 * h00 + b12 * h01
@@ -121,8 +120,9 @@ def _neg_loglik(theta8: np.ndarray, r: np.ndarray, S: np.ndarray) -> float:
     return total
 
 
-def simulate_bekk(A: np.ndarray, B: np.ndarray, C: np.ndarray, T: int,
-                  seed: int = 0) -> np.ndarray:
+def simulate_bekk(
+    A: np.ndarray, B: np.ndarray, C: np.ndarray, T: int, seed: int = 0
+) -> np.ndarray:
     """Simulate returns from a BEKK(1,1) with the given matrices."""
     rng = np.random.default_rng(seed)
     r = np.empty((T, 2))
@@ -142,12 +142,18 @@ def fit_bekk(returns: pd.DataFrame) -> BekkFit:
     r = r - r.mean(axis=0)
     S = np.cov(r.T)
     theta0 = np.array([0.08, 0.0, 0.0, 0.08, 0.80, 0.0, 0.0, 0.80])
-    res = minimize(_neg_loglik, theta0, args=(r, S), method="L-BFGS-B",
-                   options={"maxiter": 400, "ftol": 1e-8})
+    res = minimize(
+        _neg_loglik,
+        theta0,
+        args=(r, S),
+        method="L-BFGS-B",
+        options={"maxiter": 400, "ftol": 1e-8},
+    )
     A = res.x[:4].reshape(2, 2)
     B = res.x[4:].reshape(2, 2)
     C = _target_C(A, B, S)
     H = _recurse(r, C[0, 0], C[1, 0], C[1, 1], *A.flat, *B.flat)
     spec = np.max(np.abs(np.linalg.eigvals(np.kron(A, A) + np.kron(B, B))))
-    return BekkFit(C=C, A=A, B=B, loglikelihood=-res.fun,
-                   stationary=bool(spec < 1), H=H)
+    return BekkFit(
+        C=C, A=A, B=B, loglikelihood=-res.fun, stationary=bool(spec < 1), H=H
+    )
