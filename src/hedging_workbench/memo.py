@@ -8,14 +8,14 @@ not asserted as satisfied — the memo says so.
 
 from __future__ import annotations
 
-from hedging_workbench.conventions import CONTRACT_LB
+from hedging_workbench.conventions import CONTRACT_LB, lb_to_usd
 
 
 def designation_memo(prog, f0: float, collar=None, usd_eur: float = 1.08) -> str:
     """Render the designation memo. prog: HedgeProgram; f0 in cents/lb."""
     exp = prog.exposure
     total_lb = float(exp["volume_lb"].sum())
-    notional_usd = total_lb * f0 / 100.0
+    notional_usd = total_lb * lb_to_usd(f0)
     notional_eur = notional_usd / usd_eur
     emir_threshold_eur = 3e9
     instrument = "long coffee C futures (ICE KC)" + (
