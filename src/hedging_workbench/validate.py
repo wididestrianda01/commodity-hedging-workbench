@@ -30,7 +30,7 @@ from hedging_workbench.cva import cva_unilateral
 from hedging_workbench.data.frozen import load, load_sofr
 from hedging_workbench.data.universe import UNIVERSES, contract_label
 from hedging_workbench.note import ParticipationNote
-from hedging_workbench.risk import var_es
+from hedging_workbench.risk import filtered_var, var_es
 from hedging_workbench.vol import EWMA_LAMBDA, garch_vol
 
 
@@ -350,6 +350,35 @@ def var_coverage_backtest(
     return pd.DataFrame(rows)
 
 
+def var_coverage_filtered(
+    price: pd.Series,
+    pnl: pd.Series,
+    multiplier: float,
+    level: float = 0.95,
+    lam: float = EWMA_LAMBDA,
+) -> dict:
+    """Day-by-day coverage of the FILTERED VaR (risk.filtered_var).
+
+    Standard unconditional-coverage form: each day's VaR uses only
+    information available at t−1 (lagged EWMA vol × lagged price); a
+    breach is P&L_t strictly below -VaR_t. The static historical window
+    backtest (var_coverage_backtest) holds one stale VaR constant across
+    a whole test window — it conflates regime drift with model failure,
+    which is why the filtered form is the remediation.
+    """
+    var = filtered_var(price, multiplier=multiplier, lam=lam, level=level)
+    p = pd.Series(pnl).reindex(var.index).dropna()
+    n = len(p)
+    breaches = int((p < -var.reindex(p.index)).sum())
+    expected = (1 - level) * n
+    return {
+        "n": n,
+        "breaches": breaches,
+        "expected": expected,
+        "ratio": breaches / expected,
+    }
+
+
 def note_mc_check(
     notional: float = 1_000_000.0,
     f0: float = 320.0,
@@ -461,10 +490,18 @@ def validation_findings() -> pd.DataFrame:
     cov = var_coverage_backtest(pnl)
     tot_b, tot_e = int(cov["breaches"].sum()), float(cov["expected"].sum())
     add(
-        "VaR coverage (95%)",
+        "VaR coverage (95%, static historical)",
         f"{tot_b} breaches vs {tot_e:.1f} expected over {len(cov)} windows",
         f"observed/expected within {VAR_BREACH_RATIO_BAND}",
         VAR_BREACH_RATIO_BAND[0] <= tot_b / tot_e <= VAR_BREACH_RATIO_BAND[1],
+    )
+    filt = var_coverage_filtered(kc, pnl, multiplier=DOLLARS_PER_CENT, level=0.95)
+    add(
+        "VaR coverage (95%, filtered EWMA)",
+        f"{filt['breaches']} breaches vs {filt['expected']:.1f} expected over "
+        f"{filt['n']} days (ratio {filt['ratio']:.2f}) — remediation of the static FLAG",
+        f"observed/expected within {VAR_BREACH_RATIO_BAND}",
+        VAR_BREACH_RATIO_BAND[0] <= filt["ratio"] <= VAR_BREACH_RATIO_BAND[1],
     )
 
     mc = note_mc_check()

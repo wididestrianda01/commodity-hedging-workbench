@@ -6,7 +6,7 @@ Hand-computed on a constructed discrete distribution plus invariants.
 import pandas as pd
 import pytest
 
-from hedging_workbench.risk import var_es
+from hedging_workbench.risk import filtered_var, var_es
 
 
 def test_hand_computed_discrete_distribution():
@@ -50,3 +50,29 @@ def test_empty_and_bad_level_fail_loud():
         var_es(pd.Series(dtype=float))
     with pytest.raises(ValueError):
         var_es(pd.Series([1.0, -1.0]), levels=(1.0,))
+
+
+def test_filtered_var_hand_computed():
+    """Prices [100, 101, 103, 102] → returns [1%, 1.9802%, −0.9709%].
+    No look-ahead: VaR at day t uses the EWMA variance over returns
+    ≤ t−1 and price(t−1). At the LAST day (t4) the usable variance is
+    over {1%, 1.9802%}: weights 0.06/1.00, var = 0.054381/0.11321
+    = 0.48039 %² → sd 0.69310 %/day.
+    VaR(95) = 1.6449 × 0.0069310 × price(t−1)=103 × 1000 = 1,174.26.
+    First three days have no usable lagged variance → NaN."""
+    px = pd.Series([100.0, 101.0, 103.0, 102.0], index=pd.date_range("2026-01-01", periods=4, freq="B"))
+    out = filtered_var(px, multiplier=1_000.0, level=0.95)
+    assert out.iloc[:3].isna().all()
+    assert out.iloc[-1] == pytest.approx(1_174.26, rel=1e-3)
+
+
+def test_filtered_var_no_lookahead():
+    """A future outlier must not move earlier VaR values."""
+    px = pd.Series(
+        [100.0, 101.0, 103.0, 102.0, 300.0], index=pd.date_range("2026-01-01", periods=5, freq="B")
+    )
+    out = filtered_var(px, multiplier=1_000.0)
+    base = filtered_var(px.iloc[:4], multiplier=1_000.0)
+    assert out.iloc[:4].dropna().tolist() == pytest.approx(base.dropna().tolist())
+    with pytest.raises(ValueError):
+        filtered_var(px, level=1.0)
