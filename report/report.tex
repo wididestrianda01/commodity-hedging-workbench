@@ -1,0 +1,328 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\pagestyle{fancy}
+\lhead{Commodity Hedging \& Structuring Workbench}
+\rhead{\today}
+\cfoot{\thepage}
+
+\title{Commodity Hedging \& Structuring Workbench\\
+\large Phase 6 --- Validation \& Decision Report}
+\author{learner workbench (extension of the Citi MQA Forage simulation)}
+\date{September 2026}
+
+\newcommand{\usd}{\$}
+
+\begin{document}
+
+\maketitle
+
+\section*{Executive Summary}
+
+This report closes the validation phase of a practitioner-style commodity
+hedging workbench built as an extension of the Citi MQA Forage simulation.
+The workbench prices and hedges a roaster's coffee purchase program on a
+frozen ICE Coffee~C (KC=F) curve: data gates, implied convenience-yield
+term structure, a Schwartz--Smith two-factor fit, GARCH(1,1) working
+volatility, a roaster futures-and-collar hedge program, a capital-protected
+participation note, and a junior xVA layer (EE/EPE/PFE, unilateral CVA,
+netting and collateral).
+
+Phase~6 adds two things. First, an SR~26-2-aligned validation harness: a
+model inventory, a fail-closed no-look-ahead gate on calibration windows,
+and a rolling-window outcomes program across every model. Second, the
+decision analysis: the roaster's outcome unhedged versus futures-only
+versus a zero-cost collar, with margin-funding peaks per strategy.
+
+\textbf{Headline decision numbers} (1.2M lb annual purchases, 2.67 average
+contracts, front price 324.25~¢/lb): the full futures hedge locks the
+annual purchase cost at \usd{}3,891,000 with a 95th-percentile margin peak
+of \usd{}103,797; the zero-cost collar keeps the cost locked between the
+strikes with a materially lower margin peak (\usd{}44,250 at the 95th
+percentile) at the price of re-exposure beyond the strikes; the unhedged
+roaster faces a 95th-percentile cost of \usd{}5,288,885 and a simulated
+worst case of \usd{}10.3M.
+
+\textbf{Validation verdict:} five of six outcome checks PASS. The one FLAG
+--- historical 95\% VaR coverage of 38 breaches versus 25.2 expected ---
+is retained and discussed: it is the expected signature of fat-tailed
+daily coffee returns under an unconditional historical VaR, and it
+motivates the volatility-scaling extension named in the limitations.
+
+All regulation content (SR 26-2, IFRS 9, EMIR 3, MiFID II/PRIIPs) is
+\emph{mapped as methodology}, never asserted as compliance. All numbers in
+this report are regenerated in one run by \texttt{report/make\_numbers.py}
+from the frozen data (SHA-256 manifests); the hand-calculated checks of
+Section~\ref{sec:handcalc} are reproducible without reading code.
+
+\section{Scope and Honest Framing}
+
+This project extends the Citi MQA Forage simulation onto real frozen
+market data. It is a learner workbench, not a production system: no Citi
+affiliation is claimed, no internal methodology is reproduced, no
+regulatory compliance is asserted, and nothing here is investment advice.
+The frozen data (Yahoo Finance daily bars, SOFR from FRED) is checksummed
+and gated; ICE redistribution licensing forbids public display, so the
+repo stays private and any future cloud artifact is gated snapshots only.
+
+\section{Methodology Walkthrough (Phases 1--5)}
+
+\subsection{Data gates and MQA replication (Phase 1)}
+The coffee chain (8 contract months plus the continuous KC=F front) is
+frozen with SHA-256 manifests and count/completeness gates, with a gold
+(GC=F) fallback armed and the pipeline fail-closed: a coffee gate failure
+switches universe, a gold failure stops everything. The Forage Task~3
+methodology (forward curve, volatility, SOFR discounting) is re-run
+entirely on the frozen data; the simulation's toy numbers are labelled
+context only.
+
+\subsection{Carry and curve calibration (Phase 2)}
+As of the frozen date (2026-09-04) the curve is backwardated across every
+consecutive spread: front implied convenience yield 40.8\%/yr decaying to
+6.3\%/yr on the back. The Schwartz--Smith (2000) two-factor fit in reduced
+form gives a mean-reversion speed $\kappa = 5.97$/yr (half-life
+$\approx 1.4$ months), an equilibrium level $\xi = 5.673$ in logs
+($e^{\xi} \approx 291$~¢/lb), and a fit RMSE far inside the pre-declared
+tolerance. GARCH(1,1) working volatility: last conditional 39.2\%/yr,
+long-run 38.5\%/yr, persistence 0.802; the EWMA ($\lambda = 0.94$)
+reference reads 47.2\%/yr. SOFR is frozen at 3.66\%.
+
+\subsection{Roaster hedge program (Phase 3)}
+The roaster's exposure (100,000~lb/month, 12 months) maps to contract
+selection with the in-or-after-month rule and a 10-day pre-expiry roll
+schedule, averaging 2.67 contracts. A long hedge plus a zero-cost collar
+(long 280 put / short 382.06 call, both priced at 7.69~¢/lb, premium gap
+$1.3\times 10^{-14}$ by construction) frames the cost band. IFRS~9
+princip-based effectiveness (economic relationship, credit-dominance,
+hedge-ratio consistency) is tested, not the retired IAS~39 80--125\%
+band; EMIR~3 NFC threshold and hedging-exemption criteria are mapped.
+
+\subsection{Structured participation note (Phase 4)}
+A capital-protected participation note on KC=F (notional \usd{}1M, 9-month
+tenor, participation $p = 0.6$, ATM) prices in closed form as a discounted
+zero plus $p$ times a Black-76 call over the reference price:
+$0.97292 + 0.07877 = 1.05169$ per unit notional. The antithetic MC engine
+(100k paths) reproduces it at $1.051913 \pm 0.000452$ --- the two-way
+match is the trust mechanism. Issuer-side delta/vega greeks are validated
+by bump-and-reprice MC.
+
+\subsection{Risk gates and junior xVA (Phase 5)}
+On the 2.67-contract book: daily 95\% VaR \usd{}12,900 / ES \usd{}17,615;
+99\% VaR \usd{}19,928 / ES \usd{}25,921 (ES $\geq$ VaR asserted
+everywhere). The lognormal martingale exposure engine gives
+EPE \usd{}33,755 and 1-year PFE \usd{}250,975. Bucketed unilateral CVA at
+3\% flat hazard, 60\% LGD, SOFR-flat discounting: \usd{}583.79. Netting
+and collateral transforms are asserted against their invariants (netted
+CVA $\leq$ sum of standalones; collateral attenuates EE monotonically).
+
+\section{Hand-Calculated Verification}\label{sec:handcalc}
+
+Per the spec, an interviewer must be able to verify the numbers without
+reading code. Each check below is a test in the suite with the arithmetic
+worked out in its docstring.
+
+\begin{table}[h!]
+\centering\small
+\begin{tabular}{p{4.2cm}p{7.6cm}p{3.4cm}}
+\toprule
+\textbf{Check} & \textbf{Hand calculation} & \textbf{Result} \\
+\midrule
+CVA, two buckets, constant EE \usd{}1M, hazard 10\%, LGD 60\%, $r=4$\% &
+$dS_1 = 1-e^{-0.05} = 0.04877058$, $df_1 = e^{-0.02} = 0.98019867$;\newline
+$dS_2 = e^{-0.05}-e^{-0.10} = 0.04639219$, $df_2 = e^{-0.04} = 0.96078944$;\newline
+CVA $= 0.6 \times 10^6 \times (0.04780387 + 0.04457460)$ &
+\usd{}55,427.08 (exact match) \\
+\midrule
+VaR coverage, two 5-point windows at 80\% &
+W1 hist $[-5..-1]$: VaR $= |q_{0.2}| = 4.2$, next window 0 breaches;\newline
+W2 hist $[-2..2]$: VaR $= |q_{0.2}| = 1.2$, next window ($-10$ first) 1 breach &
+VaR $[4.2, 1.2]$, breaches $[0, 1]$ \\
+\midrule
+EWMA forecast, returns $[1,2,3]$\%, $\lambda = 0.94$ &
+weights $w = (1, 0.94, 0.8836)$; weighted variance
+$\frac{\sum w (x-\bar x)^2}{\sum w - \sum w^2 / \sum w} = 0.9993624$;
+annualised $\sqrt{252 \times 0.9993624}$ &
+15.869\%/yr \\
+\midrule
+Collar net cost, synthetic zero-gap collar (f0 320, put 280, call 350),
+volume 100k lb &
+unhedged $= 1000 f_T$;\newline futures locked at 320k;\newline
+collar: $240$k below the put ($f_T - K_p + f_0$), 320k between, 350k at
+$f_T = 380$ &
+exact on all four scenarios \\
+\midrule
+Collar margin cap, contracts $= 2$ (\usd{}750/cent) &
+futures drawdowns 15k/90k; collar funding loss capped at
+$(320-280)\times 750 = 30$k &
+$[15k, 30k]$ capped \\
+\bottomrule
+\end{tabular}
+\caption{Hand-calculated verification table (all reproduced exactly by the
+test suite).}
+\end{table}
+
+\section{SR 26-2-Aligned Validation}\label{sec:validation}
+
+The posture is methodological fidelity, not compliance: the harness
+reproduces the \emph{mechanics} SR~26-2 (2026-04-17, superseding SR 11-7)
+expects of model-risk discipline --- inventory, conceptual soundness,
+outcomes analysis, benchmarking --- over a frozen dataset, with every
+finding reproducible from the package.
+
+\subsection{Model inventory}
+
+\begin{table}[h!]
+\centering\scriptsize
+\begin{tabular}{p{2.7cm}p{2.5cm}p{3.4cm}p{3.2cm}p{2.7cm}p{1.5cm}}
+\toprule
+\textbf{Model} & \textbf{Inputs} & \textbf{Key assumptions} & \textbf{Benchmark} & \textbf{Outcomes check} & \textbf{Review} \\
+\midrule
+Data gates & frozen chain + manifests & count/completeness ceilings & SHA-256 checksums & fail-closed on injected gap & 2026-09, green \\
+Implied carry & frozen chain, SOFR & expiry $\approx$ 15th; storage $d=0$ & cost-of-carry identity & curve stability at past as-ofs & 2026-09, green \\
+Schwartz--Smith & curve snapshot & reduced form; $\kappa$ weakly identified & NLS RMSE, $\kappa>0$ & RMSE vs tolerance & 2026-09, green \\
+GARCH(1,1) + EWMA & daily returns & constant mean & EWMA ($\lambda=0.94$) & rolling forecast vs realized & 2026-09, green \\
+Black-76 + collar & F, K, vol, SOFR & European; discounted premiums & put-call parity; zero-cost gap & gap $\approx 0$ by construction & 2026-09, green \\
+Participation note & F0, vol, SOFR, $p$ & risk-neutral martingale futures & MC vs closed form & MC re-check & 2026-09, green \\
+IFRS 9 effectiveness & hedge P\&L pairs, ratios & principles-based (no 80--125\% band) & credit-dominance rejection & boundary tests & 2026-09, green \\
+Discrete-CVaR ratio & scenario P\&L grid & discrete scenarios & MDPI (2025) hedge-ratio study & directional invariants & 2026-09, green \\
+GARCH-BEKK cross hedge & coffee/gold returns & diagonal BEKK(1,1) & literature hedge ratios & ratio stability & 2026-09, green \\
+Margin stress & frozen path, vol, program & monetisable-put funding cap & FSB 2024 framing; relief identities & peaks vs buffer & 2026-09, green \\
+Historical VaR/ES & realized P\&L & empirical tail & ES $\geq$ VaR invariant & rolling breach count & 2026-09, green \\
+EE/EPE/PFE & F0, vol, SOFR, book & lognormal martingale & analytic forward MtM & invariants in suite & 2026-09, green \\
+Unilateral CVA & EE profile, hazard, SOFR & flat hazard/SOFR; no DVA & QuantLib re-derivation & CVA-vs-QuantLib re-quote & 2026-09, green \\
+\bottomrule
+\end{tabular}
+\caption{Model inventory (thirteen models, Phases 1--5; all reviewed 2026-09 with the suite green).}
+\end{table}
+
+\subsection{Conceptual soundness}
+
+Each model's assumptions are stated in its module docstring and reproduced
+in the inventory above. Two deliberate simplifications are flagged rather
+than hidden: the Schwartz--Smith fit is reduced-form on a single snapshot
+(volatility parameters would need the full Kalman MLE), and the collar's
+margin treatment assumes the long put's gain is monetisable day-by-day
+(real clearing charges full futures VM daily and settles options
+separately).
+
+\subsection{No-look-ahead gate}
+
+Calibration windows are gated fail-closed: any observation after the
+valuation as-of date raises a \texttt{LookaheadError}. The historical
+as-of reconstructions in the outcomes program pre-truncate each frozen
+series to the as-of window and then gate; an untruncated (contaminated)
+input is refused. The gate is itself tested against a poisoned window.
+
+\subsection{Outcomes analysis}
+
+\begin{table}[h!]
+\centering\small
+\begin{tabular}{p{3.2cm}p{7.8cm}p{3.6cm}}
+\toprule
+\textbf{Check} & \textbf{Finding} & \textbf{Status} \\
+\midrule
+No-look-ahead gate & active on 8 frozen series (as-of 2026-09-04); rejects a poisoned as-of window & PASS \\
+Curve stability & front implied yield 14.8--40.8 \%/yr over 6 historical as-of dates; backwardated at 4 of 6 as-ofs (two historical contango episodes) & PASS \\
+VaR coverage (95\%) & 38 breaches vs 25.2 expected over 4 windows (ratio 1.51, band 0.5--1.5) & \textcolor{red}{FLAG} \\
+Note MC vs closed form & $|$diff$| = 8.2\times10^{-5}$ per unit notional, s.e.\ $6.2\times10^{-4}$ ($\leq 2$ s.e.) & PASS \\
+CVA vs QuantLib & relative difference $1.9\times10^{-16}$ (same discretization, tol $10^{-9}$) & PASS \\
+\bottomrule
+\end{tabular}
+\caption{Outcome-analysis findings on the frozen data.}
+\end{table}
+
+\paragraph{The VaR coverage FLAG.} The historical 95\% VaR under-covers by
+roughly 50\% on this book: 38 breaches against 25.2 expected over four
+126-day windows. This is the classic unconditional-historical-VaR failure
+mode on fat-tailed, volatility-clustered commodity returns --- the
+trailing window's empirical quantile understates the tail of the next
+window precisely when volatility has risen. SR 26-2's outcomes-analysis
+pillar exists to surface exactly this; the honest response is recorded
+here and the remediation path (volatility-scaled or filtered-historical
+VaR, reusing the Phase 2 GARCH engine) is named in the limitations rather
+than silently widening the acceptance band.
+
+\section{Decision: Hedged vs Unhedged Outcome}
+
+Scenario engine: 50,000 lognormal martingale paths over one quarter
+(0.25y), the same distribution Black-76 prices. Buyer's economics: the
+roaster pays volume $\times f_T$ regardless; each hedge's terminal P\&L
+reduces it. Note that the collar's strikes bound the \emph{hedge P\&L},
+not the cost: between the strikes the cost is locked at the forward;
+below the put (280) and above the call (382.06) the net cost moves 1:1
+with the market again --- a crash below the put keeps helping the buyer,
+a spike above the call keeps hurting.
+
+\begin{table}[h!]
+\centering\small
+\begin{tabular}{lrrrrr}
+\toprule
+\textbf{Strategy} & \textbf{Cost mean} & \textbf{Cost p95} & \textbf{Cost worst} &
+\textbf{Margin peak mean} & \textbf{Margin peak p95} \\
+\midrule
+Unhedged & 3,895,696 & 5,288,885 & 10,296,484 & --- & --- \\
+Futures & \textbf{3,891,000} & 3,891,000 & 3,891,000 & 43,655 & 103,797 \\
+Collar & 3,893,639 & 4,595,138 & 9,602,737 & 30,647 & 44,250 \\
+\bottomrule
+\end{tabular}
+\caption{Annual purchase cost (1.2M lb) and margin-funding peaks (USD),
+2.67 average contracts, put 280 / call 382.06, 0.25y horizon.}
+\end{table}
+
+\paragraph{Reading the table.} The full futures hedge is a strict price
+lock at \usd{}3,891,000 ($= 1.2\mathrm{M}\times 3.2425$); its residual
+risk is purely margin funding --- mean peak \usd{}43.7k, 95th percentile
+\usd{}103.8k, comfortably inside the \usd{}800k reference-collateral
+assumption carried from the Starbucks 10-K framing. The collar costs
+almost the same on average (\usd{}3.894M) but trades tail exposure for
+liquidity: its margin peak is capped at the put protection
+($44{,}250 = (324.25 - 280)\times \tfrac{8}{3}\times 375$), roughly 58\% lower
+at the 95th percentile, while the cost re-floats 1:1 beyond the strikes
+(p95 \usd{}4.595M, worst \usd{}9.6M in-simulation). The unhedged roaster
+owns the entire distribution: p95 \usd{}5.29M, simulated worst \usd{}10.3M.
+
+\textbf{Decision.} For a roaster whose binding constraint is cash-flow
+certainty (the Starbucks 10-K template: \usd{}37.9M of margin collateral
+posted as of FY2025), the choice is between the futures lock (price
+certainty, full margin exposure) and the collar (locked cost band,
+half the margin peak, tail re-exposure). The workbench's numbers support
+the collar for a margin-constrained buyer and the futures lock when
+budget certainty dominates --- with the IFRS~9 cash-flow-hedge
+designation and effectiveness testing identical in structure for both.
+
+\section{Limitations}
+
+\begin{itemize}
+\item \textbf{Basis risk is not modelled.} All hedges are evaluated on the
+front KC=F series; the roaster's physical purchases settle on a differential
+basis to the exchange. A basis-scenario overlay is the natural next step.
+\item \textbf{Historical volatility only.} The working vol is a GARCH(1,1)
+point estimate on frozen history; option premiums (collar legs, the note)
+inherit its parameter risk. No implied-vol surface is available for free
+coffee options.
+\item \textbf{VaR under-coverage is open.} The 95\% coverage FLAG
+(Section~\ref{sec:validation}) stands; volatility-scaled VaR is the
+pre-declared remediation, not yet implemented.
+\item \textbf{Unofficial source.} The Citi MQA Forage simulation is a
+learning artifact, not a source of Citi methodology; all toy numbers from
+it are labelled context only.
+\item \textbf{Junior xVA only.} Unilateral CVA with flat hazard and flat
+SOFR; no DVA/FVA/MVA, no wrong-way-risk modelling beyond a qualitative
+discussion (a buyer short a call on coffee is long the reference asset ---
+WWR here is benign by inspection).
+\item \textbf{Margin conventions are assumptions.} \usd{}8k initial margin
+per contract and the monetisable-put funding cap are stated learner
+assumptions, not exchange feeds.
+\end{itemize}
+
+\end{document}

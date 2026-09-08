@@ -1,0 +1,122 @@
+{
+ "curve": {
+  "date": "2026-09-04",
+  "front_label": "Sep 2026",
+  "front_price": 324.25,
+  "n_contracts": 8,
+  "state": "backwardation",
+  "front_yield": 0.4079011628747756,
+  "back_yield": 0.0633271271665786
+ },
+ "ss": {
+  "chi": 0.130840524538273,
+  "xi": 5.673230988235153,
+  "kappa": 5.97465317145762,
+  "half_life_yr": 0.116014630584965
+ },
+ "vol": {
+  "garch_last": 39.24235329995907,
+  "garch_longrun": 38.53654020019331,
+  "ewma": 47.178043609293596,
+  "persistence": 0.80249485021978
+ },
+ "sofr": 0.0366,
+ "note": {
+  "cf_price": 1.0516894807771289,
+  "bond": 0.9729233275036953,
+  "call": 0.13127692212238937,
+  "participation_value": 0.07876615327343361,
+  "mc": 1.0519133653592185,
+  "mc_se": 0.0004524029482707208
+ },
+ "book": {
+  "contracts": 2.6666666666666665,
+  "epe": 33755.47538790582,
+  "pfe_1y": 250975.12282649553
+ },
+ "cva": {
+  "ours": 583.7911472980448
+ },
+ "var_es": {
+  "0.95": {
+   "var": 12899.999999999989,
+   "es": 17614.70615162569
+  },
+  "0.99": {
+   "var": 19927.998046874964,
+   "es": 25921.430315290196
+  }
+ },
+ "decision": [
+  {
+   "strategy": "unhedged",
+   "cost_mean": 3895696.314795554,
+   "cost_p95": 5288884.768314952,
+   "cost_worst": 10296484.240750723,
+   "margin_peak_mean": 0.0,
+   "margin_peak_p95": 0.0
+  },
+  {
+   "strategy": "futures",
+   "cost_mean": 3891000.0,
+   "cost_p95": 3891000.0000000005,
+   "cost_worst": 3891000.000000001,
+   "margin_peak_mean": 43655.310134458465,
+   "margin_peak_p95": 103796.79156493588
+  },
+  {
+   "strategy": "collar",
+   "cost_mean": 3893639.1932384325,
+   "cost_p95": 4595137.798953129,
+   "cost_worst": 9602737.2713889,
+   "margin_peak_mean": 30647.419825739456,
+   "margin_peak_p95": 44250.0
+  }
+ ],
+ "collar": {
+  "f0": 324.25,
+  "put_strike": 280.0,
+  "call_strike": 382.06224744681856,
+  "put_premium": 7.6921184281468875,
+  "call_premium": 7.692118428146901,
+  "premium_gap": 1.3322676295501878e-14
+ },
+ "findings": [
+  {
+   "check": "no-look-ahead gate",
+   "detail": "gate active on 8 frozen series (last 2026-09-04); rejects a poisoned as-of window",
+   "expectation": "rejects any observation after as-of; fail-closed",
+   "status": "PASS"
+  },
+  {
+   "check": "working vol forecast",
+   "detail": "GARCH RMSE 4.01 vs EWMA 6.80 %/yr over 4 windows",
+   "expectation": "GARCH/EWMA RMSE ratio \u2264 1.1",
+   "status": "PASS"
+  },
+  {
+   "check": "curve stability",
+   "detail": "front implied yield 14.8..40.8 %/yr over 6 as-of dates; backwardated at 4 of 6 as-ofs",
+   "expectation": "front yield within (-100.0, 100.0) %/yr at every as-of",
+   "status": "PASS"
+  },
+  {
+   "check": "VaR coverage (95%)",
+   "detail": "38 breaches vs 25.2 expected over 4 windows",
+   "expectation": "observed/expected within (0.5, 1.5)",
+   "status": "FLAG"
+  },
+  {
+   "check": "note MC vs closed form",
+   "detail": "|diff| = 8.16e-05 per unit notional, s.e. 6.24e-04",
+   "expectation": "|diff| \u2264 2.0 \u00d7 s.e.",
+   "status": "PASS"
+  },
+  {
+   "check": "CVA vs QuantLib",
+   "detail": "relative difference 1.87e-16",
+   "expectation": "\u2264 1e-09 (same discretization)",
+   "status": "PASS"
+  }
+ ]
+}
