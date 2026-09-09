@@ -1,0 +1,11 @@
+# Lambda variant of the refresh image: same packaged job, wrapped in the AWS
+# Lambda Python runtime interface. Handler uploads the gated bundle to S3.
+FROM public.ecr.aws/lambda/python:3.12
+
+WORKDIR /job
+COPY pyproject.toml ./
+COPY src ./src
+RUN pip install --no-cache-dir .
+
+COPY pipeline/lambda_handler.py ${LAMBDA_TASK_ROOT}/lambda_handler.py
+CMD ["lambda_handler.handler"]
