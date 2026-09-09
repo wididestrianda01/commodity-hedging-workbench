@@ -13,6 +13,8 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from pathlib import Path
+
 from arch import arch_model
 
 EWMA_LAMBDA = 0.94
@@ -61,10 +63,12 @@ def garch_vol(returns_pct: pd.Series, lam: float = EWMA_LAMBDA) -> VolFit:
     )
 
 
-def vol_from_frozen() -> tuple[pd.Series, VolFit]:
+def vol_from_frozen(
+    frozen_dir: Path | None = None,
+) -> tuple[pd.Series, VolFit]:
     """Frozen KC=F daily % returns + the fit. Returns (returns, fit)."""
-    from hedging_workbench.data.frozen import load
+    from hedging_workbench.data.frozen import FROZEN_DIR, load
 
-    kc = load(["KC=F"])["KC=F"].dropna()
+    kc = load(["KC=F"], frozen_dir=frozen_dir or FROZEN_DIR)["KC=F"].dropna()
     rets = kc.pct_change().dropna() * 100
     return rets, garch_vol(rets)

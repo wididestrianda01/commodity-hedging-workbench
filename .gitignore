@@ -8,5 +8,7 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 
-# Terraform working dir (provider binaries, never commit)
+# Terraform working dir + state (state holds resource addrs; never commit)
 pipeline/terraform/.terraform/
+*.tfstate
+*.tfstate.*

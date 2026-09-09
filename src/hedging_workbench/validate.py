@@ -439,6 +439,7 @@ CVA_QL_TOL = 1e-9
 def validation_findings() -> pd.DataFrame:
     """Run every outcome check on the frozen data -> PASS/FLAG rows."""
     from hedging_workbench.conventions import DOLLARS_PER_CENT
+    from hedging_workbench.hedge import variation_margin
     from hedging_workbench.vol import vol_from_frozen
 
     rows: list[dict] = []
@@ -486,7 +487,7 @@ def validation_findings() -> pd.DataFrame:
     )
 
     kc = load(["KC=F"])["KC=F"].dropna()
-    pnl = kc.diff().dropna() * DOLLARS_PER_CENT  # long 1 contract
+    pnl = variation_margin(1.0, kc)["flow_usd"].iloc[1:]  # long 1 contract
     cov = var_coverage_backtest(pnl)
     tot_b, tot_e = int(cov["breaches"].sum()), float(cov["expected"].sum())
     add(
@@ -515,7 +516,9 @@ def validation_findings() -> pd.DataFrame:
     ql = cva_ql_benchmark(
         np.array([80_000.0, 95_000.0, 110_000.0, 90_000.0]),
         np.array([0.25, 0.5, 1.0, 2.0]),
-        0.1, 0.6, 0.04,
+        0.1,
+        0.6,
+        0.04,
     )
     if ql is None:
         add("CVA vs QuantLib", "QuantLib not installed — skipped", "n/a", True)

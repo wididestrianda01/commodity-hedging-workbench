@@ -36,9 +36,13 @@ def test_net_costs_hand_computed():
     """
     f = np.array([200.0, 300.0, 350.0, 380.0])
     out = net_costs(VOL_LB, _collar(), f)
-    assert out["unhedged"].tolist() == pytest.approx([200_000.0, 300_000.0, 350_000.0, 380_000.0])
+    assert out["unhedged"].tolist() == pytest.approx(
+        [200_000.0, 300_000.0, 350_000.0, 380_000.0]
+    )
     assert out["futures"].tolist() == pytest.approx([320_000.0] * 4)
-    assert out["collar"].tolist() == pytest.approx([240_000.0, 320_000.0, 320_000.0, 350_000.0])
+    assert out["collar"].tolist() == pytest.approx(
+        [240_000.0, 320_000.0, 320_000.0, 350_000.0]
+    )
 
 
 def test_margin_peaks_hand_computed():
@@ -51,8 +55,6 @@ def test_margin_peaks_hand_computed():
     assert out["futures_p95"] == pytest.approx(86_250.0)
     assert out["collar_mean"] == pytest.approx(22_500.0)
     assert out["collar_p95"] == pytest.approx(29_250.0)
-
-
 
 
 def test_decision_table_strategy_structure():

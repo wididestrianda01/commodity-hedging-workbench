@@ -18,6 +18,7 @@ notebook must surface them, not hide them.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -95,8 +96,12 @@ def fit_curve(curve: pd.DataFrame) -> SSFit:
 
 def fit_from_frozen(
     universe: str = "coffee",
+    frozen_dir: Path | None = None,
 ) -> tuple[pd.DataFrame, SSFit, pd.DataFrame]:
-    """Convenience: frozen curve + fit + yield term structure in one call."""
-    curve = load_curve(universe)
+    curve = (
+        load_curve(universe, frozen_dir=frozen_dir)
+        if frozen_dir
+        else load_curve(universe)
+    )
     ts = yield_term_structure(curve)
     return curve, fit_curve(curve), ts

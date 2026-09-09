@@ -61,6 +61,12 @@ with st.sidebar:
             f"{label}</span> <span class='gate-n'>{n} files</span></div>",
             unsafe_allow_html=True,
         )
+        for f in g["files"]:  # frozen snapshot + checksum (ticket 7-05)
+            st.markdown(
+                f"<div class='gate-file'><code>{f['symbol']}</code> "
+                f"<span class='gate-n'>{f['sha256']}</span></div>",
+                unsafe_allow_html=True,
+            )
 
 
 @st.cache_data(show_spinner="computing program…")

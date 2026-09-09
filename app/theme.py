@@ -102,6 +102,8 @@ h1, h2, h3, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
   display: flex; gap: 8px; align-items: center; }
 .gate-n { color: var(--muted); font-family: 'SF Mono', 'JetBrains Mono',
   ui-monospace, monospace; font-size: 0.68rem; }
+.gate-file { font-size: 0.7rem; color: var(--muted); margin: 2px 0 2px 12px;
+  display: flex; gap: 6px; align-items: center; }
 </style>
 """
 

@@ -40,7 +40,7 @@ def refresh(start: str = "2024-01-01", out_dir: str | Path = "/out") -> Path:
         path = out / f"{frozen.slug(symbol)}.csv"
         s.rename("close").to_csv(path, index_label="date")
         files[symbol] = path
-    frozen._write_manifest(out, report.universe, start, files)
+    frozen.write_manifest(out, report.universe, start, files)
     (out / "gate_report.json").write_text(
         json.dumps(
             {"summary": report.summary(), **asdict(report)}, indent=2, default=str
@@ -49,7 +49,7 @@ def refresh(start: str = "2024-01-01", out_dir: str | Path = "/out") -> Path:
     )
     rates_path = out / "SOFR.csv"
     frozen.fetch_sofr(start).rename("sofr").to_csv(rates_path, index_label="date")
-    frozen._write_manifest(out, "rates", start, {"SOFR": rates_path})
+    frozen.write_manifest(out, "rates", start, {"SOFR": rates_path})
     return out
 
 

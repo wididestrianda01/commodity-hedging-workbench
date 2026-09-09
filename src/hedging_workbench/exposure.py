@@ -45,6 +45,16 @@ class FuturesBook:
         """USD MtM paths, shape (n_paths, n_steps+1)."""
         return self.contracts * DOLLARS_PER_CENT * (f_paths - self.entry)
 
+    def pnl_from_returns(self, returns_pct) -> np.ndarray:
+        """USD P&L from PERCENT returns of the front: r/100 * notional."""
+        return (
+            np.asarray(returns_pct, dtype=float)
+            / 100.0
+            * self.contracts
+            * DOLLARS_PER_CENT
+            * self.entry
+        )
+
 
 def simulate_front(
     f0: float,
@@ -94,14 +104,23 @@ def netted_mtm(paths: list[np.ndarray]) -> np.ndarray:
     return out
 
 
-def collateralized(mtm: np.ndarray, threshold: float, ia: float = 0.0) -> np.ndarray:
-    """Exposure after collateral: max(V - (IA + threshold), 0).
+def collateralized(
+    mtm: np.ndarray, threshold: float, ia: float = 0.0, mta: float = 0.0
+) -> np.ndarray:
+    """Exposure after collateral: max(V - held, 0).
 
-    VM is tracked implicitly by the threshold/IA haircut — the junior
-    desk model; the variation-margin mechanics themselves live in
-    hedge.variation_margin.
+    Collateral mechanics (12-05): IA + threshold are held in full, and
+    above the threshold further transfers happen in COMPLETED MTA round
+    lots (floor) — so the residual uncollateralised exposure is bounded
+    by the MTA, the granularity that makes small moves post nothing.
+    mta=0 keeps the continuous threshold block (no granularity).
     """
-    return np.maximum(mtm - (ia + threshold), 0.0)
+    v = np.asarray(mtm, dtype=float)
+    if mta <= 0:
+        return np.maximum(v - (ia + threshold), 0.0)
+    lots = np.floor(np.maximum(v - threshold, 0.0) / mta)
+    held = ia + threshold + lots * mta
+    return np.maximum(v - held, 0.0)
 
 
 def collar_book_mtm(

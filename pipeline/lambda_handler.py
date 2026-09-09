@@ -31,14 +31,12 @@ def handler(event: dict, context) -> dict:
     bucket = os.environ["REFRESH_BUCKET"]
     print(f"refresh: start (bucket={bucket})")
     out = Path("/tmp/refresh-out")
+    # refresh() is fail-closed: a gate failure raises before ANY file is
+    # written, the invocation fails, and the schedule surfaces it in logs.
+    # A gate_report.json in `out` therefore implies ok=True.
     refresh(start=event.get("start", "2024-01-01"), out_dir=out)
     report = json.loads((out / "gate_report.json").read_text())
     print(f"refresh: gates {report['summary']}")
-    if not report["ok"]:
-        # Fail-closed: the report is still uploaded for observability, but
-        # the invocation fails so the schedule surfaces the failure.
-        _upload(bucket, out)
-        raise RuntimeError(f"gates failed: {report['summary']}")
     keys = _upload(bucket, out)
     print(f"refresh: ok universe={report['universe']} keys={len(keys)}")
     return {"bucket": bucket, "keys": keys, "universe": report["universe"]}

@@ -72,6 +72,10 @@ def test_charts_build_figures():
 
 def test_gate_snapshot_all_pass():
     g = prep.gate_snapshot()
-    assert {k: v["ok"] for k, v in g.items()} == {"coffee": True, "gold": True, "rates": True}
+    assert {k: v["ok"] for k, v in g.items()} == {
+        "coffee": True,
+        "gold": True,
+        "rates": True,
+    }
     assert len(g["coffee"]["files"]) == 9
     assert all(len(f["sha256"]) == 12 for v in g.values() for f in v["files"])

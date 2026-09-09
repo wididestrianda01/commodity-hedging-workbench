@@ -9,11 +9,19 @@ import math
 import numpy as np
 import pytest
 
-from hedging_workbench.cva import cva_unilateral, discount, survival
+from hedging_workbench.cva import (
+    cva_buckets,
+    cva_unilateral,
+    discount,
+    survival,
+)
 
 ql = pytest.importorskip("QuantLib", reason="QuantLib not installed")
 
 HAZ, LGD, R = 0.1, 0.6, 0.04
+# Pre-declared benchmark tolerance: identical discretisation, so the gap
+# covers float noise only (see hedging_workbench.cva module docstring).
+QL_TOLERANCE = 1e-9
 
 
 def test_single_bucket_hand_value():
@@ -33,6 +41,19 @@ def test_two_bucket_hand_value():
     """
     got = cva_unilateral([1e6, 1e6], [0.5, 1.0], HAZ, LGD, R)
     assert got == pytest.approx(55_427.08, rel=1e-4)
+
+
+def test_bucket_decomposition_sums_to_total():
+    """12-03 AC: per-bucket contributions available and additive."""
+    ten = np.array([0.5, 1.0])
+    ee = np.array([1e6, 1e6])
+    b = cva_buckets(ee, ten, HAZ, LGD, R)
+    assert b["cva_usd"].sum() == pytest.approx(
+        cva_unilateral(ee, ten, HAZ, LGD, R), rel=1e-12
+    )
+    # hand-check bucket 1: LGD * EE * df * dS
+    hand1 = LGD * 1e6 * math.exp(-R * 0.5) * (1 - math.exp(-HAZ * 0.5))
+    assert b["cva_usd"].iloc[0] == pytest.approx(hand1, rel=1e-12)
 
 
 def test_conventions_survival_and_discount():
@@ -68,4 +89,4 @@ def test_ql_benchmark_matched_case():
     s_prev = np.concatenate([[1.0], s_ql[:-1]])
     ql_cva = LGD * np.sum(ee * df_ql * (s_prev - s_ql))
     ours = cva_unilateral(ee, tenors, HAZ, LGD, R)
-    assert ours == pytest.approx(ql_cva, rel=1e-9)
+    assert ours == pytest.approx(ql_cva, rel=QL_TOLERANCE)

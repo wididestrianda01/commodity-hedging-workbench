@@ -110,7 +110,7 @@ def download_series(
     return out
 
 
-def _write_manifest(
+def write_manifest(
     frozen_dir: Path, name: str, start: str, files: dict[str, Path]
 ) -> Path:
     manifest = {
@@ -141,7 +141,7 @@ def freeze(
         path = frozen_dir / f"{slug(symbol)}.csv"
         s.rename("close").to_csv(path, index_label="date")
         files[symbol] = path
-    return _write_manifest(frozen_dir, universe, start, files)
+    return write_manifest(frozen_dir, universe, start, files)
 
 
 # -- rates adapter -----------------------------------------------------------
@@ -163,7 +163,7 @@ def freeze_rates(start: str = "2024-01-01", frozen_dir: Path = FROZEN_DIR) -> Pa
     s = fetch_sofr(start)
     path = frozen_dir / "SOFR.csv"
     s.rename("sofr").to_csv(path, index_label="date")
-    return _write_manifest(frozen_dir, "rates", start, {"SOFR": path})
+    return write_manifest(frozen_dir, "rates", start, {"SOFR": path})
 
 
 def load_sofr(frozen_dir: Path = FROZEN_DIR) -> pd.Series:

@@ -65,14 +65,55 @@ def _same_shape(sigma=SIG):
 
 def test_netting_benefit_direction():
     """Netted EE <= sum of standalones; equality for same-sign books."""
-    m1 = BOOK.mtm(_same_shape())
-    m2 = FuturesBook(5.0, F0 * 1.05).mtm(_same_shape())
-    ee_ind = profile(m1)["ee"] + profile(m2)["ee"]
+    f = _same_shape()
+    m1 = BOOK.mtm(f)
+    m2 = FuturesBook(CONTRACTS, F0 * 1.02).mtm(f)
     ee_net = profile(netted_mtm([m1, m2]))["ee"]
-    assert (ee_net <= ee_ind + 1e-9).all()
-    # perfectly correlated same-sign books: equality (no diversification)
-    ee_same = profile(netted_mtm([m1, m1.copy()]))["ee"]
+    ee_sum = profile(m1)["ee"] + profile(m2)["ee"]
+    assert (ee_net <= ee_sum + 1e-9).all()
+    # perfectly correlated same-sign book: netting is a no-op
+    ee_same = profile(netted_mtm([m1, m1]))["ee"]
     assert np.allclose(ee_same, 2 * profile(m1)["ee"])
+
+
+def test_netting_cva_direction():
+    """CVA-level direction (12-05): netted CVA <= sum of standalone CVAs;
+    equality on a perfectly-correlated same-sign book; a mirrored book
+    nets to zero exposure, hence zero CVA.
+    """
+    from hedging_workbench.cva import HAZARD, LGD, cva_unilateral
+
+    f = _same_shape()
+    m1 = BOOK.mtm(f)
+    idx = np.linspace(0, m1.shape[1] - 1, 6).round().astype(int)[1:]
+    ten = profile(m1)["t"].to_numpy()[idx]
+
+    def cva(mtm):
+        ee = profile(mtm)["ee"].to_numpy()[idx]
+        return cva_unilateral(ee, ten, HAZARD, LGD, 0.0366)
+
+    m2 = FuturesBook(CONTRACTS, F0 * 1.02).mtm(f)
+    assert cva(netted_mtm([m1, m2])) <= cva(m1) + cva(m2) + 1e-6
+    assert cva(netted_mtm([m1, m1])) == pytest.approx(2 * cva(m1), rel=1e-9)
+    assert cva(netted_mtm([m1, -m1])) == pytest.approx(0.0, abs=1e-6)
+
+
+def test_collateral_mta_rounds_transfers():
+    """MTA mechanics (12-05): IA + threshold held in full; further
+    transfers post in completed MTA round lots only, so the residual
+    exposure is bounded by the MTA; mta=0 keeps the continuous block.
+    """
+    mtm = np.array([[80.0, 120.0, 175.0, 260.0]])
+    ia, threshold, mta = 10.0, 100.0, 50.0
+    ee = collateralized(mtm, threshold, ia, mta)
+    # below threshold: fully collateralised
+    assert ee[0, 0] == pytest.approx(0.0)
+    # completed lots only: residual (V-threshold) mod MTA, net of IA
+    assert np.allclose(ee, np.array([[0.0, 10.0, 15.0, 0.0]]))
+    # no granularity (mta=0) reproduces the continuous threshold block
+    assert np.allclose(
+        collateralized(mtm, threshold, ia), np.maximum(mtm - (ia + threshold), 0.0)
+    )
 
 
 def test_collateral_reduces_ee_monotonically():

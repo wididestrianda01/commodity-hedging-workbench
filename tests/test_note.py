@@ -32,20 +32,13 @@ def test_participation_zero_is_pure_bond():
     assert n.closed_form(SIG, R)["price"] == pytest.approx(math.exp(-R * T))
 
 
-def test_full_participation_atm_equals_forward_fraction():
-    """p=1, K=F0: E[max(F_T-F0,0)]/F0 discounted = e^{-rT}(e^{σ²T/2}N(d1)-1).
-
-    For a lognormal martingale with the Black-76 distribution the ATM
-    forward call premium equals F0*(e^{σ²T/2}*N(σ√T/2) - 1)... — no: on a
-    FUTURES forward Black-76 gives the standard closed form; here we just
-    assert the note price at p=1/K=F0 is e^{-rT} * E[F_T]^+  fraction,
-    cross-checked against black76 (identity, not an approximation).
+def test_full_participation_zero_strike_is_double_discount():
+    """Conservation, p=1 with K=0 (ticket 11-01 AC): call = e^{-rT}*F0, so
+    price = bond + call/F0 = 2 * e^{-rT} — pure bond plus the whole
+    forward, hand-computed.
     """
-    n = ParticipationNote(1_000_000, F0, T, 1.0)
-    cf = n.closed_form(SIG, R)
-    # identity: price = bond + call/F0 — already covered; assert bounds instead
-    assert cf["call"] > 0
-    assert cf["price"] > cf["bond"]
+    n = ParticipationNote(1_000_000, F0, T, 1.0, strike=0.0)
+    assert n.closed_form(SIG, R)["price"] == pytest.approx(2 * math.exp(-R * T))
 
 
 def test_mc_converges_to_closed_form():
@@ -68,7 +61,9 @@ def test_mc_deterministic_seed():
 
 
 def test_greeks_analytic_and_direction():
-    """Issuer is short the call: delta < 0, vega < 0; delta matches FD."""
+    """Issuer is short the call: delta < 0, vega < 0; both match FD on the
+    closed form (hand-checkable analytic-vs-FD, ticket 11-03).
+    """
     g = NOTE.greeks(SIG, R)
     assert g["delta"] < 0 and g["vega"] < 0
     h = 1e-3
@@ -78,6 +73,8 @@ def test_greeks_analytic_and_direction():
     dn = ParticipationNote(1, F0 * (1 - h), T, 0.6, strike=F0).closed_form(SIG, R)[
         "price"
     ]
+    # issuer delta = -d(price)/df0; FD over the bumped closed form
+    assert g["delta"] == pytest.approx(-(up - dn) / (2 * h * F0), rel=1e-4)
     up = NOTE.closed_form(SIG + h, R)["price"]
     dn = NOTE.closed_form(SIG - h, R)["price"]
     assert -g["vega"] == pytest.approx((up - dn) / (2 * h), rel=1e-4)
@@ -94,7 +91,7 @@ def test_mc_greeks_validate_analytic():
 def test_governance_renders_note_parameters():
     """A changed note visibly flows through; disclaimer present."""
     doc = render_governance(NOTE, SIG, R)
-    assert "60%" in doc and "1.00 yr" in doc and "300.00" in doc
+    assert "60%" in doc and "1.00 yr" in doc and "300.00" in doc and "KC=F" in doc
     assert "not a KID" in doc
     other = render_governance(ParticipationNote(5_000_000, 250.0, 2.0, 0.4), 0.3, R)
     assert "40%" in other and "250.00" in other and other != doc

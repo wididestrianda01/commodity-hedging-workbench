@@ -27,6 +27,23 @@ def test_stressed_path_drift():
     assert p.index[-1] > pd.Timestamp("2026-09-03")  # after last base date
 
 
+def test_backwardation_widening_steepens_after_roll_window():
+    """Back shock leaves the front path alone until back_start_day, then
+    compounds a steeper fall (ticket 10-08: rolling into a sinking
+    deferred leg). Also: run_scenario returns the full profiles.
+    """
+    base = _base()
+    p = stressed_path(
+        base, -0.5, horizon_days=40, back_shock_annual=-0.5, back_start_day=21
+    )
+    flat = stressed_path(base, -0.5, horizon_days=40)
+    assert p.iloc[20] == pytest.approx(flat.iloc[20])
+    assert p.iloc[-1] < flat.iloc[-1]
+    r = run_scenario(2.0, base, -0.5, "down", horizon_days=5)
+    assert list(r.profile.columns) == ["flow_usd", "balance_usd"]
+    assert r.collar_profile is None
+
+
 def test_peak_equals_hand_computed_worst_day():
     """2 contracts, down shock: every day loses k*375*2 vs prior day, so the
     peak drawdown is the last day — cumulative drift k*t/252."""

@@ -26,7 +26,9 @@ from hedging_workbench.hedge import build_program
 from hedging_workbench.note import ParticipationNote
 from hedging_workbench.pricing import collar_vs_futures, zero_cost_collar
 from hedging_workbench.risk import var_es
-from hedging_workbench.stress import stress_report
+from hedging_workbench.conventions import lb_to_usd
+from hedging_workbench.cva import HAZARD, LGD
+from hedging_workbench.stress import COLLATERAL_REFERENCE, stress_report
 from hedging_workbench.vol import vol_from_frozen
 
 
@@ -53,11 +55,6 @@ def gate_snapshot() -> dict:
         except FileNotFoundError:
             out[name] = {"ok": False, "bad": ["manifest missing"], "files": []}
     return out
-
-
-COLLATERAL_REFERENCE = 37.9e6  # 10-K margin collateral reference (notebook 03)
-HAZ, LGD = 0.02, 0.6  # stated, not calibrated (notebook 04)
-DOLLARS_PER_CENT = 375.0  # 37,500 lb contract, $375 per cent
 
 
 def curve_snapshot(universe: str = "coffee") -> dict:
@@ -104,14 +101,14 @@ def hedge_snapshot(
     pnl = pd.DataFrame(
         {
             "f": grid,
-            "futures_usd": (grid - m["f0"]) * monthly_lb / 100.0,
+            "futures_usd": (grid - m["f0"]) * lb_to_usd(monthly_lb),
             "collar_usd": [
                 collar_vs_futures(monthly_lb, collar, x)["collar_usd"] for x in grid
             ],
         }
     )
     stress = stress_report(
-        program.exposure["contracts"].iloc[0],
+        program.exposure["contracts"].sum(),
         m["kc"],
         m["sigma"],
         collar=collar,
@@ -282,7 +279,7 @@ def book_snapshot(seed: int = 42) -> dict:
     book = FuturesBook(contracts, m["f0"])
 
     rets, _ = vol_from_frozen()
-    pnl_book = (rets / 100.0) * contracts * DOLLARS_PER_CENT * m["f0"]
+    pnl_book = FuturesBook(contracts, m["f0"]).pnl_from_returns(rets)
     var_tab = var_es(pnl_book)
 
     H, STEPS, N = 1.0, 252, 50_000
@@ -293,8 +290,8 @@ def book_snapshot(seed: int = 42) -> dict:
     idx = np.linspace(0, STEPS, 13).round().astype(int)[1:]
     tenors = prof["t"].to_numpy()[idx]
     ee_grid = prof["ee"].to_numpy()[idx]
-    cva_pkg = cva_unilateral(ee_grid, tenors, HAZ, LGD, m["r"])
-    cva_ql = cva_quantlib(ee_grid, tenors, HAZ, LGD, m["r"])
+    cva_pkg = cva_unilateral(ee_grid, tenors, HAZARD, LGD, m["r"])
+    cva_ql = cva_quantlib(ee_grid, tenors, HAZARD, LGD, m["r"])
 
     # netting set: roaster long + the Phase 4 issuer's offsetting short
     short = FuturesBook(contracts, m["f0"]).mtm(f_paths)

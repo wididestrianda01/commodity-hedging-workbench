@@ -42,7 +42,9 @@ def test_gate_rejects_post_asof_observation():
 
 def test_gate_rejects_all_nan_window():
     """All-NaN window at/below as-of: gate passes, asof_value refuses."""
-    s = pd.Series([np.nan, np.nan], index=pd.date_range("2026-01-01", periods=2, freq="B"))
+    s = pd.Series(
+        [np.nan, np.nan], index=pd.date_range("2026-01-01", periods=2, freq="B")
+    )
     with pytest.raises(LookaheadError, match="no data"):
         asof_value(s, s.index[-1])
 
@@ -83,9 +85,15 @@ def test_rolling_vol_backtest_structure():
     )
     out = rolling_vol_backtest(rets * 100, window=126)
     assert list(out.columns[:5]) == [
-        "fit_end", "realized", "garch", "garch_longrun", "ewma",
+        "fit_end",
+        "realized",
+        "garch",
+        "garch_longrun",
+        "ewma",
     ]
-    assert len(out) == 2  # 3 windows: fit(0-126)+real(126-252), fit(126-252)+real(252-378)
+    assert (
+        len(out) == 2
+    )  # 3 windows: fit(0-126)+real(126-252), fit(126-252)+real(252-378)
     for m in ("garch", "ewma"):
         assert out[f"err_{m}"].notna().all()
     assert set(out.attrs["rmse"]) == {"garch", "ewma"}
@@ -137,9 +145,7 @@ def test_curve_stability_hand_flat_curve():
     symbols = [s for s in UNIVERSES["coffee"] if not s.endswith("=F")]
     raw = load(symbols)
     as_of = min(s.dropna().index.max() for s in raw.values()) - pd.Timedelta(days=5)
-    flat = pd.Series(
-        100.0, index=pd.date_range("2026-01-01", periods=30, freq="B")
-    )
+    flat = pd.Series(100.0, index=pd.date_range("2026-01-01", periods=30, freq="B"))
     series = {s: flat for s in symbols}
     curve = _curve_asof(symbols, series, as_of, "coffee")
     ts = yield_term_structure(curve, r=0.04)
@@ -195,7 +201,9 @@ def test_model_inventory_complete():
         "hedging_workbench.stress",
     }.issubset(modules)
     for c in inv:
-        assert all(getattr(c, f) for f in ("module", "inputs", "assumptions", "benchmark"))
+        assert all(
+            getattr(c, f) for f in ("module", "inputs", "assumptions", "benchmark")
+        )
         assert c.review_status
 
 

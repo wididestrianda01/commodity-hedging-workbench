@@ -19,6 +19,8 @@ and the Phase 5 scenario engine.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
@@ -29,9 +31,7 @@ from hedging_workbench.sim import martingale_paths
 from hedging_workbench.vol import vol_from_frozen
 
 
-def net_costs(
-    volume_lb: float, collar: Collar, f_terminal: np.ndarray
-) -> pd.DataFrame:
+def net_costs(volume_lb: float, collar: Collar, f_terminal: np.ndarray) -> pd.DataFrame:
     """Per-scenario net purchase cost (USD) for the three strategies.
 
     Physical cost volume×f_T is incurred under every strategy; each
@@ -74,8 +74,10 @@ def margin_peaks(
     95th percentile across paths.
     """
     drawdown = np.maximum(f0 - paths.min(axis=1), 0.0) * contracts * DOLLARS_PER_CENT
-    out = {"futures_mean": float(drawdown.mean()),
-           "futures_p95": float(np.quantile(drawdown, 0.95))}
+    out = {
+        "futures_mean": float(drawdown.mean()),
+        "futures_p95": float(np.quantile(drawdown, 0.95)),
+    }
     if put_strike is not None:
         capped = np.minimum(
             drawdown, max(f0 - put_strike, 0.0) * contracts * DOLLARS_PER_CENT
@@ -128,19 +130,24 @@ def decision_from_frozen(
     t: float = 0.25,
     n_paths: int = 50_000,
     seed: int = 42,
+    frozen_dir: Path | None = None,
 ) -> pd.DataFrame:
     """Wire the frozen curve front price, GARCH vol and SOFR into
     decision_table — the single call the report and app make."""
-    curve = load_curve("coffee")
-    _, fit = vol_from_frozen()
-    from hedging_workbench.data.frozen import latest_rate
+    curve = (
+        load_curve("coffee", frozen_dir=frozen_dir)
+        if frozen_dir
+        else load_curve("coffee")
+    )
+    _, fit = vol_from_frozen(frozen_dir=frozen_dir)
+    from hedging_workbench.data.frozen import FROZEN_DIR, latest_rate
 
     return decision_table(
         volume_lb=volume_lb,
         contracts=contracts,
         f0=float(curve["price"].iloc[0]),
         sigma=fit.garch_last / 100.0,
-        r=latest_rate(),
+        r=latest_rate(frozen_dir or FROZEN_DIR),
         put_strike=put_strike,
         t=t,
         n_paths=n_paths,

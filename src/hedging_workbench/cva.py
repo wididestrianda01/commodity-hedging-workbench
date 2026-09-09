@@ -22,6 +22,7 @@ dynamics — out of scope here, see spec.)
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 
 
 def survival(t: float | np.ndarray, hazard: float) -> float | np.ndarray:
@@ -34,12 +35,30 @@ def discount(t: float | np.ndarray, r: float) -> float | np.ndarray:
     return np.exp(-r * np.asarray(t, dtype=float))
 
 
+# Stated scenario parameters, not calibrated (notebook 04): flat hazard
+# and loss-given-default assumed for every CVA exercise in the workbench.
+HAZARD = 0.02
+LGD = 0.6
+
+
 def cva_unilateral(
     ee: np.ndarray, tenors: np.ndarray, hazard: float, lgd: float, r: float
 ) -> float:
     """Unilateral CVA (same units as ee) on a bucketed EE profile.
 
     ee[i] pairs with the bucket ENDING at tenors[i]; S starts at 1.
+    Validation and the per-bucket math live in cva_buckets; this is
+    the total over the buckets.
+    """
+    return float(cva_buckets(ee, tenors, hazard, lgd, r)["cva_usd"].sum())
+
+
+def cva_buckets(
+    ee: np.ndarray, tenors: np.ndarray, hazard: float, lgd: float, r: float
+) -> pd.DataFrame:
+    """Per-bucket CVA contribution: LGD * EE(t_i) * df(t_i) * ΔS_i.
+
+    cva_unilateral is the sum of cva_usd over these rows.
     """
     ee = np.asarray(ee, dtype=float)
     tenors = np.asarray(tenors, dtype=float)
@@ -49,7 +68,15 @@ def cva_unilateral(
         raise ValueError("tenors must be strictly increasing and positive")
     s_prev = np.concatenate([[1.0], survival(tenors[:-1], hazard)])
     ds = s_prev - survival(tenors, hazard)
-    return float(lgd * np.sum(ee * discount(tenors, r) * ds))
+    return pd.DataFrame(
+        {
+            "t": tenors,
+            "ee": ee,
+            "df": discount(tenors, r),
+            "ds": ds,
+            "cva_usd": lgd * ee * discount(tenors, r) * ds,
+        }
+    )
 
 
 def cva_quantlib(
@@ -63,9 +90,7 @@ def cva_quantlib(
     try:
         import QuantLib as ql
     except ImportError as e:  # pragma: no cover
-        raise ImportError(
-            "pip install QuantLib-Python to run the benchmark"
-        ) from e
+        raise ImportError("pip install QuantLib-Python to run the benchmark") from e
     ee = np.asarray(ee, dtype=float)
     tenors = np.asarray(tenors, dtype=float)
     ql.Settings.instance().evaluationDate = ql.Date(

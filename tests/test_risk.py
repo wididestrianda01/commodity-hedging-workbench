@@ -60,7 +60,10 @@ def test_filtered_var_hand_computed():
     = 0.48039 %² → sd 0.69310 %/day.
     VaR(95) = 1.6449 × 0.0069310 × price(t−1)=103 × 1000 = 1,174.26.
     First three days have no usable lagged variance → NaN."""
-    px = pd.Series([100.0, 101.0, 103.0, 102.0], index=pd.date_range("2026-01-01", periods=4, freq="B"))
+    px = pd.Series(
+        [100.0, 101.0, 103.0, 102.0],
+        index=pd.date_range("2026-01-01", periods=4, freq="B"),
+    )
     out = filtered_var(px, multiplier=1_000.0, level=0.95)
     assert out.iloc[:3].isna().all()
     assert out.iloc[-1] == pytest.approx(1_174.26, rel=1e-3)
@@ -69,7 +72,8 @@ def test_filtered_var_hand_computed():
 def test_filtered_var_no_lookahead():
     """A future outlier must not move earlier VaR values."""
     px = pd.Series(
-        [100.0, 101.0, 103.0, 102.0, 300.0], index=pd.date_range("2026-01-01", periods=5, freq="B")
+        [100.0, 101.0, 103.0, 102.0, 300.0],
+        index=pd.date_range("2026-01-01", periods=5, freq="B"),
     )
     out = filtered_var(px, multiplier=1_000.0)
     base = filtered_var(px.iloc[:4], multiplier=1_000.0)
