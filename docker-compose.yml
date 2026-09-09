@@ -11,5 +11,7 @@ services:
   # ever leaves the machine.
   floci:
     image: floci/floci:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  # real-Docker Lambda (Phase 8)
     ports:
       - "4566:4566"

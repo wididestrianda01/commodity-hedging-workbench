@@ -39,10 +39,11 @@ provider "aws" {
   s3_use_path_style = true
 
   endpoints {
-    s3     = "http://${local.host}"
-    lambda = "http://${local.host}"
-    iam    = "http://${local.host}"
-    logs   = "http://${local.host}"
+    s3        = "http://${local.host}"
+    lambda    = "http://${local.host}"
+    iam       = "http://${local.host}"
+    logs      = "http://${local.host}"
+    scheduler = "http://${local.host}"
   }
 
   skip_credentials_validation = true
@@ -97,6 +98,69 @@ resource "aws_lambda_function" "refresh" {
       REFRESH_BUCKET = aws_s3_bucket.snapshots.id
     }
   }
+}
+
+resource "aws_cloudwatch_log_group" "refresh" {
+  name              = "/aws/lambda/${aws_lambda_function.refresh.function_name}"
+  retention_in_days = 7
+}
+
+resource "aws_lambda_permission" "scheduler" {
+  statement_id  = "AllowSchedulerInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.refresh.function_name
+  principal     = "scheduler.amazonaws.com"
+}
+
+data "aws_iam_policy_document" "scheduler_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["scheduler.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "scheduler" {
+  name               = "workbench-scheduler-role"
+  assume_role_policy = data.aws_iam_policy_document.scheduler_assume.json
+}
+
+resource "aws_iam_role_policy" "scheduler_invoke" {
+  name = "invoke-refresh"
+  role = aws_iam_role.scheduler.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "lambda:InvokeFunction"
+      Resource = aws_lambda_function.refresh.arn
+    }]
+  })
+}
+
+resource "aws_scheduler_schedule" "nightly" {
+  name = "workbench-refresh-nightly"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  schedule_expression = "rate(1 day)"
+
+  target {
+    arn      = aws_lambda_function.refresh.arn
+    role_arn = aws_iam_role.scheduler.arn
+  }
+}
+
+output "schedule_name" {
+  value = aws_scheduler_schedule.nightly.name
+}
+
+output "log_group" {
+  value = aws_cloudwatch_log_group.refresh.name
 }
 
 output "bucket" {

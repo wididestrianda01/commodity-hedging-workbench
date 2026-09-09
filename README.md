@@ -53,7 +53,26 @@ Teardown:
 docker compose down        # add -v to drop any floci state
 ```
 
-Cloud work is emulator-based by design. Deploying the same Terraform to a
+## Refresh pipeline (emulator-based)
+
+The nightly pipeline is IaC-managed against the floci emulator — see
+`pipeline/terraform/README.md` for the full runbook:
+
+```bash
+docker build -f pipeline/Dockerfile.lambda -t workbench-refresh-lambda:latest .
+cd pipeline/terraform && tofu init && tofu apply
+# scheduled (EventBridge Scheduler, rate(1 day)) or manual:
+curl -s -X POST "http://localhost:4566/2015-03-31/functions/workbench-refresh/invocations" -d '{}'
+tofu destroy   # teardown
+```
+
+Each run re-runs the data gates and lands a SHA-256-verified snapshot bundle
+(universe CSVs + manifests + gate report + SOFR) in emulated S3. Fail-closed
+holds end-to-end: if the gates fail, the invocation errors and **no snapshot
+is promoted** — the failure is visible in the Lambda's CloudWatch logs.
+
+Cloud work is emulator-based by design — labeled emulator-based (floci),
+never production AWS. Deploying the same Terraform to a
 real AWS account is an explicit, separately-gated step (zero-spend
 guardrail: free-tier verification, budget alarm, immediate teardown).
 The app displays frozen data locally only — no redistribution of ICE data.
@@ -73,4 +92,4 @@ Coffee `KC=F` + per-contract chain is primary; gold `GC=F` is the pre-declared f
 | 5. Risk gates (book + junior xVA) | `notebooks/04_book_risk_xva.ipynb` | done |
 | 6. Validation + decision report | `report/report.pdf` | done |
 | 7. Local Streamlit app (Docker) | `app/` + `docker compose up` | done |
-| 8. Cloud pipeline (floci → AWS optional) | Terraform + runbook | next |
+| 8. Cloud pipeline (floci → AWS optional) | `pipeline/` Terraform + runbook | done (emulator-based) |
