@@ -147,7 +147,7 @@ def model_inventory() -> list[ModelCard]:
             name="GARCH-BEKK cross hedge",
             module="hedging_workbench.bekk",
             inputs="Coffee/gold return pairs",
-            assumptions="Diagonal BEKK(1,1); cross-asset hedge reference",
+            assumptions="Full 2×2 BEKK(1,1), variance-targeted intercept; cross-asset hedge reference",
             benchmark="Literature comparison (GARCH-BEKK hedge ratios)",
             outcomes_check="Stability of ratio in suite",
         ),

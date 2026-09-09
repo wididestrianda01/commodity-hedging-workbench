@@ -25,7 +25,7 @@ All numbers below are regenerated in one run by
 | What does going unhedged cost? | 95th-percentile annual cost $5.29M, simulated worst case $10.3M |
 | Which volatility model? | GARCH(1,1) beats EWMA on rolling forecasts: RMSE 4.01 vs 6.80 %/yr over 4 windows |
 | Does the structured note price two ways? | $1M-notional capital-protected participation note: closed form $1.05169 vs Monte Carlo $1.051913 ± 0.000452 |
-| Does the CVA model match a benchmark? | Bucketed unilateral CVA $583.79 agrees with a QuantLib re-derivation to 1.9e-16 relative |
+| Does the CVA model match a benchmark? | Bucketed unilateral CVA $583.79 (this book); the engine re-quotes a matched EE grid through QuantLib to 1.9e-16 relative, and notebook 04's matched pair agrees to 4.8e-16 |
 | Does VaR cover? | Static historical 95% VaR under-covers (38 breaches vs 25.2 expected) — kept as a flag; a filtered EWMA estimator restores coverage to ratio 1.10 |
 
 ## Data

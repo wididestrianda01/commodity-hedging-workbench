@@ -17,7 +17,7 @@ def designation_memo(prog, f0: float, collar=None, usd_eur: float = 1.08) -> str
     total_lb = float(exp["volume_lb"].sum())
     notional_usd = total_lb * lb_to_usd(f0)
     notional_eur = notional_usd / usd_eur
-    emir_threshold_eur = 3e9
+    emir_threshold_eur = 4e9
     instrument = "long coffee C futures (ICE KC)" + (
         " with zero-cost collar (long put / short call)" if collar else ""
     )
@@ -57,11 +57,14 @@ def designation_memo(prog, f0: float, collar=None, usd_eur: float = 1.08) -> str
         "",
         f"- Annual commodity derivative notional ≈ €{notional_eur / 1e6:.1f}M "
         f"(USD {notional_usd / 1e6:.1f}M at {usd_eur}).",
-        f"- ESMA NFC uncleared threshold for commodity derivatives: €3B "
-        f"(ESMA FR 2026-02-25). Position is "
+        f"- ESMA NFC uncleared threshold for commodity (and emission-allowance) "
+        f"derivatives: €4B (ESMA FR 2026-02-25 final report, raised from the €3B "
+        f"CP proposal). Position is "
         f"{notional_eur / emir_threshold_eur:.4%} of threshold → below-threshold "
         f"NFC: clearing obligation does not apply; risk-mitigation techniques "
-        f"(variance margin) apply only above thresholds.",
+        f"(variance margin) apply only above thresholds. EMIR 3 moved the NFC "
+        f"calculation to entity-level uncleared OTC only; group hedging "
+        f"exemption retained.",
         "- Hedging exemption (RTS 21a criteria): positions that objectively "
         "reduce commercial risk are exempt from position-limit and certain "
         "reporting considerations — the program's designation memo and "
