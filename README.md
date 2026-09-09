@@ -90,7 +90,7 @@ curve with implied convenience yields, the roaster hedge program with a
 zero-cost collar, the participation note priced two ways, and book-risk xVA.
 Alongside it, the [floci](https://github.com/floci-io/floci) local AWS
 emulator answers on http://localhost:4566 as the gate-test fixture for the
-Phase 8 pipeline. Nothing in the demo leaves the machine.
+nightly refresh pipeline. Nothing in the demo leaves the machine.
 
 Teardown: `docker compose down` (add `-v` to drop floci state).
 
