@@ -12,3 +12,16 @@ __pycache__/
 pipeline/terraform/.terraform/
 *.tfstate
 *.tfstate.*
+
+# local-only notes and planning artifacts (not for the public repo)
+/interview-brief.md
+/memos/
+
+# market data bars regenerate locally (exchange-data licensing; manifests stay committed)
+data/frozen/KC*.csv
+data/frozen/GC*.csv
+
+# latex build artifacts
+report/*.aux
+report/*.log
+report/*.out
