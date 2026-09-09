@@ -28,8 +28,8 @@
 \maketitle
 
 \textbf{Validation verdict:} six of seven outcome checks PASS. The one
-FLAG --- historical 95\% VaR coverage of 38 breaches versus 25.2 expected
-under the static historical estimator --- is retained and discussed; the
+FLAG (historical 95\% VaR coverage of 38 breaches versus 25.2 expected
+under the static historical estimator) is retained and discussed; the
 filtered (EWMA-scaled) estimator remediated it, covering at 5.5\% of days
 versus the 5\% expectation (ratio 1.10, inside the pre-declared band).
 
@@ -70,9 +70,11 @@ This project extends the Citi MQA Forage simulation onto real frozen
 market data. It is a learner workbench, not a production system: no Citi
 affiliation is claimed, no internal methodology is reproduced, no
 regulatory compliance is asserted, and nothing here is investment advice.
-The frozen data (Yahoo Finance daily bars, SOFR from FRED) is checksummed
-and gated; ICE redistribution licensing forbids public display, so the
-repo stays private and any future cloud artifact is gated snapshots only.
+The data (Yahoo Finance daily bars, SOFR from FRED) is checksummed
+and gated; exchange-data redistribution licensing forbids committing the
+price bars, so only manifests, gate reports and executed notebooks are
+committed and the bars regenerate locally through the gated freeze. Any
+future cloud artifact is gated snapshots only.
 
 \section{Methodology Walkthrough (Phases 1--5)}
 
@@ -111,7 +113,7 @@ A capital-protected participation note on KC=F (notional \usd{}1M, 9-month
 tenor, participation $p = 0.6$, ATM) prices in closed form as a discounted
 zero plus $p$ times a Black-76 call over the reference price:
 $0.97292 + 0.07877 = 1.05169$ per unit notional. The antithetic MC engine
-(100k paths) reproduces it at $1.051913 \pm 0.000452$ --- the two-way
+(100k paths) reproduces it at $1.051913 \pm 0.000452$; the two-way
 match is the trust mechanism. Issuer-side delta/vega greeks are validated
 by bump-and-reprice MC.
 
@@ -182,8 +184,8 @@ test suite).}
 
 The posture is methodological fidelity, not compliance: the harness
 reproduces the \emph{mechanics} SR~26-2 (2026-04-17, superseding SR 11-7)
-expects of model-risk discipline --- inventory, conceptual soundness,
-outcomes analysis, benchmarking --- over a frozen dataset, with every
+expects of model-risk discipline (inventory, conceptual soundness,
+outcomes analysis, benchmarking) over a frozen dataset, with every
 finding reproducible from the package.
 
 \subsection{Model inventory}
@@ -242,7 +244,7 @@ Working vol forecast & GARCH RMSE 4.01 vs EWMA 6.80 \%/yr over 4 rolling windows
 No-look-ahead gate & active on 8 frozen series (as-of 2026-09-04); rejects a poisoned as-of window & PASS \\
 Curve stability & front implied yield 14.8--40.8 \%/yr over 6 historical as-of dates; backwardated at 4 of 6 as-ofs (two historical contango episodes) & PASS \\
 VaR coverage (95\%), static historical & 38 breaches vs 25.2 expected over 4 windows (ratio 1.51, band 0.5--1.5) & \textcolor{red}{FLAG} \\
-VaR coverage (95\%), filtered EWMA & 37 breaches vs 33.7 expected over 673 days (ratio 1.10) --- remediation of the static FLAG & PASS \\
+VaR coverage (95\%), filtered EWMA & 37 breaches vs 33.7 expected over 673 days (ratio 1.10), remediating the static FLAG & PASS \\
 Note MC vs closed form & $|$diff$| = 8.2\times10^{-5}$ per unit notional, s.e.\ $6.2\times10^{-4}$ ($\leq 2$ s.e.) & PASS \\
 CVA vs QuantLib & relative difference $1.9\times10^{-16}$ (same discretization, tol $10^{-9}$) & PASS \\
 \bottomrule
@@ -254,7 +256,7 @@ CVA vs QuantLib & relative difference $1.9\times10^{-16}$ (same discretization, 
 historical 95\% VaR under-covers by roughly 50\% on this book: 38 breaches
 against 25.2 expected over four 126-day windows. Two causes were
 identified. First, the classic unconditional-historical-VaR failure mode
-on fat-tailed, volatility-clustered returns --- the trailing window's
+on fat-tailed, volatility-clustered returns: the trailing window's
 empirical quantile understates the next window's tail. Second, a flaw in
 the backtest itself: holding one stale VaR constant across a 126-day test
 window conflates volatility-regime drift with model failure. The
@@ -262,7 +264,7 @@ remediation is implemented in the package (ticket 13-05,
 \texttt{risk.filtered\_var}): a filtered estimator pricing each day with
 the lagged EWMA variance ($\lambda = 0.94$) scaled by the lagged price.
 Re-run on the same book it covers at 5.5\% of days versus the 5\%
-expectation (37/673, ratio 1.10 --- inside the pre-declared band). The
+expectation (37/673, ratio 1.10, inside the pre-declared band). The
 static historical estimator is retained in the findings as the baseline
 and its FLAG stands as the recorded evidence for why the filtered form is
 the production estimator of this workbench; the acceptance band was not
@@ -276,7 +278,7 @@ roaster pays volume $\times f_T$ regardless; each hedge's terminal P\&L
 reduces it. Note that the collar's strikes bound the \emph{hedge P\&L},
 not the cost: between the strikes the cost is locked at the forward;
 below the put (280) and above the call (382.06) the net cost moves 1:1
-with the market again --- a crash below the put keeps helping the buyer,
+with the market again: a crash below the put keeps helping the buyer,
 a spike above the call keeps hurting.
 
 \begin{table}[h!]
@@ -297,7 +299,7 @@ Collar & 3,893,639 & 4,595,138 & 9,602,737 & 30,647 & 44,250 \\
 
 \paragraph{Reading the table.} The full futures hedge is a strict price
 lock at \usd{}3,891,000 ($= 1.2\mathrm{M}\times 3.2425$); its residual
-risk is purely margin funding --- mean peak \usd{}43.7k, 95th percentile
+risk is purely margin funding: mean peak \usd{}43.7k, 95th percentile
 \usd{}103.8k, comfortably inside the \usd{}800k reference-collateral
 assumption carried from the Starbucks 10-K framing. The collar costs
 almost the same on average (\usd{}3.894M) but trades tail exposure for
@@ -313,7 +315,7 @@ posted as of FY2025), the choice is between the futures lock (price
 certainty, full margin exposure) and the collar (locked cost band,
 half the margin peak, tail re-exposure). The workbench's numbers support
 the collar for a margin-constrained buyer and the futures lock when
-budget certainty dominates --- with the IFRS~9 cash-flow-hedge
+budget certainty dominates, with the IFRS~9 cash-flow-hedge
 designation and effectiveness testing identical in structure for both.
 
 \section{Limitations}
@@ -336,7 +338,7 @@ learning artifact, not a source of Citi methodology; all toy numbers from
 it are labelled context only.
 \item \textbf{Junior xVA only.} Unilateral CVA with flat hazard and flat
 SOFR; no DVA/FVA/MVA, no wrong-way-risk modelling beyond a qualitative
-discussion (a buyer short a call on coffee is long the reference asset ---
+discussion (a buyer short a call on coffee is long the reference asset;
 WWR here is benign by inspection).
 \item \textbf{Margin conventions are assumptions.} \usd{}8k initial margin
 per contract and the monetisable-put funding cap are stated learner
