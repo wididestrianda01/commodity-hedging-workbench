@@ -5,8 +5,9 @@ CLI:  python -m hedging_workbench.data.gates
 """
 
 from __future__ import annotations
-
+from collections.abc import Callable
 from dataclasses import dataclass, field
+
 
 import pandas as pd
 
@@ -81,12 +82,18 @@ def run_gates(series: dict[str, pd.Series], universe: str) -> GateReport:
     return report
 
 
-def evaluate(coffee: dict[str, pd.Series], gold: dict[str, pd.Series]) -> GateReport:
-    """Coffee primary, gold fallback, fail closed if both fail."""
+def evaluate(
+    coffee: dict[str, pd.Series], gold: dict[str, pd.Series] | Callable[[], dict]
+) -> GateReport:
+    """Coffee primary, gold fallback, fail closed if both fail.
+
+    `gold` may be a zero-arg callable (e.g. a downloader) — invoked only when
+    coffee fails, so the passing path never pays for the fallback.
+    """
     report = run_gates(coffee, "coffee")
     if report.ok:
         return report
-    fallback = run_gates(gold, "gold")
+    fallback = run_gates(gold() if callable(gold) else gold, "gold")
     fallback.fallback_used = True
     fallback.reason = f"coffee failed: {'; '.join(report.failures[:3])}"
     if fallback.ok:
@@ -96,7 +103,6 @@ def evaluate(coffee: dict[str, pd.Series], gold: dict[str, pd.Series]) -> GateRe
         f"  coffee: {'; '.join(report.failures)}\n"
         f"  gold:   {'; '.join(fallback.failures)}"
     )
-
 
 
 def main() -> None:
