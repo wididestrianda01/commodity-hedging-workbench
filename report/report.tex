@@ -8,6 +8,7 @@
 \usepackage{array}
 \usepackage{booktabs}
 \usepackage{longtable}
+\usepackage[most]{tcolorbox}
 \usepackage{hyperref}
 \usepackage{xcolor}
 
@@ -16,8 +17,13 @@
 \rhead{\today}
 \cfoot{\thepage}
 
+\newtcolorbox{concept}[1]{colback=black!4,colframe=black!60,
+  fonttitle=\bfseries,title={#1},breakable}
+\newtcolorbox{pitfall}[1][Pitfall]{colback=red!4,colframe=red!55!black,
+  fonttitle=\bfseries,title={#1},breakable}
+
 \title{Commodity Hedging \& Structuring Workbench\\
-\large Phase 6 --- Validation \& Decision Report}
+\large A Learning Reference and Validation Report}
 \author{learner workbench (extension of the Citi MQA Forage simulation)}
 \date{September 2026}
 
@@ -26,6 +32,9 @@
 \begin{document}
 
 \maketitle
+
+\section*{Executive summary}
+
 
 \textbf{Validation verdict:} six of seven outcome checks PASS. The one
 FLAG (historical 95\% VaR coverage of 38 breaches versus 25.2 expected
@@ -64,7 +73,618 @@ this report are regenerated in one run by \texttt{report/make\_numbers.py}
 from the frozen data (SHA-256 manifests); the hand-calculated checks of
 Section~\ref{sec:handcalc} are reproducible without reading code.
 
-\section{Scope and Honest Framing}
+\clearpage
+\part{Concepts and methodology: how the workbench works}
+
+Part~I explains every concept the workbench uses, in the order a
+practitioner meets them: the business problem, the data, the curve, the
+price model, the hedge, the note, the counterparty risk, and the regulation
+that shapes each. Every concept follows the same pattern: what it is, why a
+desk needs it, the formula, a worked number from the frozen data, and the
+interpretation. Part~II then reports what was validated and what the numbers
+decided.
+
+\section{The business problem}
+
+A coffee roaster buys green coffee continuously. Our reference program is
+100{,}000~lb per month for twelve months (1.2M~lb total), priced off the ICE
+Coffee~C futures contract (37{,}500~lb per contract). Coffee can move tens of
+percent in a year; the roaster's retail margin cannot. Left unhedged, the
+annual purchase cost of this program has a simulated 95th-percentile of
+\usd{}5.29M and a worst case of \usd{}10.3M against a forward-implied
+\usd{}3.89M --- that gap is the risk the workbench prices, hedges, and
+explains.
+
+\begin{concept}{Forward and futures contracts}
+A \emph{forward} is a bilateral agreement to exchange at a fixed price on a
+fixed date; a \emph{futures} contract is the exchange-traded equivalent,
+standardized in size (\usd{}37{,}500 per 1~cent move per coffee contract),
+expiration months, and quality. Two differences matter here. First,
+futures are cleared through a central counterparty, so the roaster's
+credit exposure to any single dealer is replaced by margin obligations to
+the clearing house. Second, futures are marked to market daily: gains and
+losses settle in cash every day (variation margin). The daily settlement
+is why margin funding --- not just the final price --- becomes a risk to
+manage.
+\end{concept}
+
+\begin{concept}{Basis}
+The roaster's physical purchases settle at an origin differential over the
+exchange~C price, not at the exchange price itself. \emph{Basis} is the gap
+between the local physical price and the futures reference. A futures hedge
+removes the exchange-price risk; the basis remains in the roaster's P\&L.
+The workbench evaluates every hedge on the exchange series and says so:
+basis is not designated in the hedge relationship and not modelled
+(Section~\ref{sec:limitations}).
+\end{concept}
+
+\begin{concept}{Backwardation and contango}
+A futures \emph{curve} is a set of prices by expiry month. \emph{Backwardation}
+means deferred months trade below the front; \emph{contango} is the reverse.
+On the frozen curve (as-of 2026-09-04) every consecutive spread is
+backwardated: the front (Sep~2026) is 324.25~\textcent/lb and each later month
+sits lower. A backwardated curve is the commodity analogue of a stock paying
+a large dividend: something valuable accrues to holders of the physical
+good.
+\end{concept}
+
+\begin{concept}{Convenience yield}
+That ``something'' is the \emph{convenience yield}: the benefit of holding
+physical inventory (ability to ship now, keep roasting lines fed, exploit
+local scarcity) beyond its financing and storage cost. When near coffee is
+scarce, users bid up the front of the curve and the implied convenience
+yield rises. Chapter~\ref{ch:carry} extracts it from the curve; the frozen
+curve implies 40.8\%/yr at the front, decaying to 6.3\%/yr on the back ---
+the market is paying heavily for immediate availability.
+\end{concept}
+
+Why hedge at all: the unhedged cost distribution above is one tail away
+from a bad year. The rest of Part~I builds, piece by piece, the models that
+turn market data into that distribution and into hedge structures that
+change it.
+
+\section{Data engineering as a model-risk control}
+\label{ch:data}
+
+Every number in this workbench traces to a small set of frozen files. That
+is deliberate: in model-risk terms, uncontrolled input data is itself a
+model risk, and the cheapest control is a reproducible, checksummed
+snapshot.
+
+\begin{concept}{Data freeze with SHA-256 manifests}
+The downloader writes each series to \texttt{data/frozen/}, computes a
+SHA-256 hash per file, and records it in a JSON manifest. Every later use
+of the data re-verifies the hash before reading. A changed file is not
+silently accepted; the pipeline stops. This is what makes ``every number
+regenerated in one run'' a verifiable claim rather than a hope: the
+manifests are committed, so any reader can confirm the exact bytes behind
+the results.
+\end{concept}
+
+\begin{concept}{No-look-ahead gate}
+A \emph{look-ahead error} occurs when a calibration window accidentally
+sees data after its valuation as-of date; it silently inflates every
+backtest. The workbench makes the failure impossible to miss: each
+calibration call passes through a gate that truncates the series to the
+as-of window and raises a \texttt{LookaheadError} if any observation past
+the as-of date is requested. The gate is itself tested by feeding it a
+poisoned window and asserting it refuses.
+\end{concept}
+
+\begin{concept}{Fail-closed design with a pre-declared fallback}
+The universe logic is \emph{fail-closed}: coffee gate failures switch to
+the pre-declared gold fallback; a gold failure stops everything and
+nothing downstream is produced. The opposite (fail-open) design, returning
+partial or stale data on failure, is how mismatched numbers enter
+production systems unnoticed. Declaring the fallback \emph{before} it is
+needed prevents the subtle failure where the fallback is chosen because it
+gives the preferred answer.
+\end{concept}
+
+The sources are stated plainly: Yahoo Finance daily bars (an unofficial
+source, accepted and documented) for the ICE contract chain, and the SOFR
+rate from FRED \cite{fredsofr}. The manifests, gate reports, and executed
+notebooks are committed; the price bars are not (exchange-data licensing,
+Section~\ref{sec:scope}) and regenerate locally with one command.
+
+\section{The forward curve and cost of carry}
+\label{ch:carry}
+
+The curve is where commodity desks start. This chapter derives the one
+identity that turns two futures prices into an implied yield, applies it to
+the frozen coffee curve, and reads what it says about the physical market.
+
+\begin{concept}{The cost-of-carry identity, derived}
+Suppose you buy coffee now at spot $S$, pay financing at rate $r$ and
+storage at rate $d$, and hold one unit for a period $\tau$; a futures sale
+at $F$ locks the outcome. No-arbitrage pins the two choices together:
+buying and carrying must cost the same as buying forward, so
+$F = S\,e^{(r+d-y)\tau}$, where $y$ is the annual convenience yield
+introduced in Chapter~1. The convenience yield enters with a minus sign:
+holding the physical good earns the convenience benefit, so the forward
+only has to compensate financing plus storage \emph{minus} that benefit.
+Now take the ratio of two adjacent futures prices $F_1$ (near) and $F_2$
+(next expiry, $\tau$ apart). Spot, $S$, cancels, as does everything not
+known between the two dates:
+\[
+  \frac{\ln F_2 - \ln F_1}{\tau} \;=\; r + d - y
+  \qquad\Longrightarrow\qquad
+  y \;=\; r + d - \frac{\ln(F_2/F_1)}{\tau}.
+\]
+Two adjacent futures prices and a financing rate are enough to extract the
+market's own implied convenience yield.
+\end{concept}
+
+\begin{concept}{Worked on the frozen curve}
+As of 2026-09-04 the coffee chain carries 8 contract months plus the
+continuous front (KC=F). With SOFR frozen at 3.66\% and storage assumed
+zero (see the caveat below), applying the identity spread by spread gives
+an implied convenience yield of 40.8\%/yr at the front, decaying to
+6.3\%/yr on the back, with the curve backwardated at every consecutive
+spread. The package computes this as \texttt{carry.implied\_yield}; the
+curve-stability outcomes check re-runs it at six historical as-of dates
+(front yield 14.8--40.8\%/yr; backwardated at 4 of 6, with two historical
+contango episodes preserved rather than tuned away).
+\end{concept}
+
+\emph{Interpretation.} A 40\%/yr implied convenience yield says the market
+prices immediate availability as scarce: hedgers who need physical coffee
+now, or who fear not having it, bid the front up relative to deferred
+months. The decay from front to back is normal --- scarcity is a
+short-dated phenomenon --- and the backwardated shape is the term
+structure signature of that scarcity. For the roaster program this matters
+directly: rolling a long position through a backwardated curve
+(\emph{rolling up} the curve) tends to buy high and sell low each cycle, a
+recurring carry cost the hedge program must budget for.
+
+\begin{pitfall}[Storage is assumed, not observed]
+The identity reports $y$ \emph{gross of storage}: separating convenience
+yield from storage outlay $d$ needs a storage-cost assumption the data
+does not carry, so the workbench fixes $d=0$ and states it. Reported
+``convenience yield'' is therefore an upper bound on the true yield by the
+size of the true storage rate. The honest fix is not a secret calibration
+but a stated assumption.
+\end{pitfall}
+
+\begin{pitfall}[An unofficial source can distort a yield]
+Yahoo prices are unofficial; a stale or inconsistent quote between
+contract months would show up as an implausible implied yield. This is why
+the curve-stability check exists: it re-derives the yield at six as-of
+dates and asserts the front yield stays inside a pre-declared plausibility
+band. A data problem announces itself as a curve problem.
+\end{pitfall}
+
+\section{Price dynamics: level and volatility}
+\label{ch:dynamics}
+
+Three later chapters need a price process: the exposure engine simulates
+future MtM, the Monte Carlo prices option payoffs, and the hedge analysis
+stress-tests funding peaks. This chapter covers the two models the
+workbench fits --- a two-factor level model and a volatility model --- and
+the discipline of choosing between them with pre-declared criteria.
+
+\subsection{Level: the Schwartz--Smith two-factor model}
+
+\begin{concept}{Two factors, two horizons}
+Commodity prices mix two behaviors: short-term mean reversion (weather,
+supply shocks, inventory swings wash out) and long-term drift in the
+equilibrium price level (cost inflation, demand cycles). Schwartz and
+Smith \cite{schwartzsmith00} model the log price as the sum of both:
+$S_t = \exp(X_t + \chi_t)$, where $X_t$ is the long-term factor (a
+geometric walk with equilibrium level $\xi$ and reversion speed $\kappa$)
+and $\chi_t$ is the short-term factor (an Ornstein--Uhlenbeck deviation
+that decays toward zero at speed $\kappa$). The mean-reversion speed has a
+natural unit: the \emph{half-life} $\ln 2 / \kappa$, the time for half of
+a deviation to disappear.
+\end{concept}
+
+\begin{concept}{Fit and interpretation on the frozen curve}
+The reduced-form fit on the frozen curve gives mean-reversion speed
+$\kappa = 5.97$/yr, half-life $\ln 2 / 5.97 \approx 0.116$~yr
+($\approx 1.4$ months), and log equilibrium level $\xi = 5.673$, i.e.\
+$e^{\xi} \approx 291$~\textcent/lb. The fit RMSE sits far inside the
+pre-declared tolerance. Interpretation: the market believes coffee
+reverts to roughly 291~\textcent/lb and that price surprises are absorbed
+in weeks, not months --- while the current front (324.25) stands above the
+equilibrium, consistent with the scarcity reading of the 40\% front
+convenience yield.
+\end{concept}
+
+\begin{pitfall}[Reduced form, single snapshot]
+The fit uses one curve snapshot, which identifies the level parameters
+$(\kappa, \xi)$ but not the volatility split between the two factors; a
+full stochastic fit needs Kalman maximum-likelihood estimation on the
+whole panel of maturities. The workbench flags this rather than hiding
+it: the fit is used for level interpretation, and every premium in
+Part~II carries a GARCH volatility estimate on top of it.
+\end{pitfall}
+
+\subsection{Volatility: EWMA and GARCH(1,1)}
+
+\begin{concept}{EWMA --- the RiskMetrics estimator}
+The exponentially weighted moving average \cite{riskmetrics96} updates
+yesterday's variance with today's squared return,
+$\sigma_t^2 = \lambda\,\sigma_{t-1}^2 + (1-\lambda)\,r_{t-1}^2$, with
+decay $\lambda = 0.94$ on daily data. It is simple, always defined, and
+reacts fast to volatility clustering --- but it has no long-run level: it
+is a GARCH(1,1) with persistence forced to 1, so it can drift far from
+anything sustainable. On the frozen returns the EWMA reads 47.2\%/yr.
+\end{concept}
+
+\begin{concept}{GARCH(1,1) --- the workhorse}
+The GARCH(1,1) of Bollerslev \cite{bollerslev86} adds mean reversion:
+$\sigma_t^2 = \omega + \alpha\,r_{t-1}^2 + \beta\,\sigma_{t-1}^2$. The
+long-run variance is $\omega/(1-\alpha-\beta)$, and $\alpha+\beta$ is the
+\emph{persistence} --- how slowly variance decays back to it. On the
+frozen data: persistence $0.802$, long-run level 38.5\%/yr, last
+conditional estimate 39.2\%/yr. The current level sits almost exactly at
+its own long-run mean --- the market is in a normal-volatility regime.
+\end{concept}
+
+\begin{concept}{Choosing with a pre-declared criterion}
+Model choice is an outcome, not a preference: the workbench declares
+before looking that GARCH is adopted only if its rolling one-step forecast
+RMSE beats the EWMA reference with ratio $\leq 1.1$. On four rolling
+windows the RMSEs are 4.01 vs 6.80\%/yr (ratio 0.59) --- GARCH wins
+clearly and is adopted as the working volatility. The EWMA stays as the
+benchmark model in the inventory, which is exactly how an
+SR~26-2-style outcomes analysis should treat a model selection
+(Section~\ref{sec:regulatory}).
+\end{concept}
+
+\begin{pitfall}[Historical volatility is not implied volatility]
+Every premium and VaR below inherits this one number from frozen history;
+parameter risk flows through. No free implied-volatility surface exists
+for coffee options, so there is no market check on the level --- stated
+as a limitation in Section~\ref{sec:limitations}, not fixed by hoping.
+\end{pitfall}
+
+\section{Hedging the roaster program}
+\label{ch:hedge}
+
+With a curve, a carry reading, and a volatility model, the roaster can
+actually hedge. This chapter builds the two candidate structures --- the
+plain futures lock and the zero-cost collar --- and states exactly what
+each one does to the cost distribution.
+
+\subsection{The futures hedge and its plumbing}
+
+The program is 1.2M~lb over 12 months, i.e.\ 32 contract-months
+($1.2\mathrm{M}/37{,}500$), an average of $2.67$ contracts outstanding.
+The hedge selects each month's contract with the \emph{in-or-after} rule
+(the expiry month at or after the physical delivery date) and rolls each
+contract 10 trading days before expiry, so no position is forced into
+delivery.
+
+\begin{concept}{Margin: the liquidity side of hedging}
+Posting the hedge requires \emph{initial margin} (performance deposit,
+\usd{}8k per contract here --- a stated learner assumption, not an
+exchange feed) and daily \emph{variation margin}: every day the futures
+lose, cash leaves. A perfectly correct hedge can still bankrupt its owner
+in the middle if the price moves far enough before it pays off. This is
+why the workbench reports \emph{margin-funding peaks} (the running
+cumulative cash drain) alongside every cost number: the futures hedge
+locks the price at \usd{}3{,}891{,}000 but carries a 95th-percentile
+margin peak of \usd{}103{,}797 that must be funded throughout.
+\end{concept}
+
+\subsection{The zero-cost collar}
+
+\begin{concept}{Construction}
+Buy the futures hedge, buy a put struck at $K_p = 280$, and sell a call
+struck at $K_c = 382.06$ with the premium equal to the put's (both
+7.69~\textcent/lb; the strike $K_c$ is solved so the premiums net to zero
+--- the residual gap is $1.3\times10^{-14}$ by construction). The put
+pays $(K_p - f_T)^{+}$ dollars per lb at expiry; the short call costs
+$(f_T - K_c)^{+}$. Per pound, the terminal cost is therefore
+\[
+  \text{cost}(f_T) \;=\;
+  \begin{cases}
+    f_0 - K_p + f_T & f_T < K_p \quad \text{(put monetized, cost floats but
+      below the lock)}\\[2pt]
+    f_0 & K_p \leq f_T \leq K_c \quad \text{(cost locked at the forward)}\\[2pt]
+    f_0 - K_c + f_T & f_T > K_c \quad \text{(short call loses, cost floats)}
+  \end{cases}
+\]
+and the hedge P\&L is capped between the strikes, which caps the
+\emph{margin funding} at the put protection:
+$(324.25 - 280)\times \tfrac{8}{3}\times 375 = \usd{}44{,}250$ at the
+95th percentile, versus \usd{}103{,}797 for the futures lock.
+\end{concept}
+
+\begin{pitfall}[The strikes bound the hedge P\&L, not the buyer's cost]
+``Locked between the strikes'' is easy to misread. The \emph{hedge
+position} gains are capped; the \emph{buyer's total cost} still floats
+1:1 with the market outside them: below 280 the monetized put drags the
+cost back down (a crash keeps helping), above 382.06 the short call
+bleeds (a spike keeps hurting). The collar is not a budget guarantee; it
+is a trade that trades tail cost for liquidity --- p95 cost \usd{}4.60M
+versus the futures' locked \usd{}3.89M, with margin peaks roughly halved.
+\end{pitfall}
+
+\emph{Choosing between them.} For a roaster whose binding constraint is
+cash-flow certainty, pick the futures lock: same locked cost, full margin
+exposure. For a margin-constrained buyer, the collar halves the funding
+peak at the price of re-exposure beyond the strikes. Both structures are
+priced in the decision section (Part~II) on the same scenario engine, so
+the comparison is like-for-like. Hedge accounting for either is treated
+in Section~\ref{sec:regulatory} (IFRS~9); the clearing-threshold
+classification in the EMIR~3 part of the same section.
+
+\section{The structured participation note}
+\label{ch:note}
+
+Structured notes are where curve, volatility, and discounting meet in one
+instrument. The workbench builds the desk-side version of the product the
+Citi Forage simulation gestures at: a note issued to an investor that
+returns principal plus a share of the coffee rally.
+
+\begin{concept}{Capital-protected participation payoff}
+The note pays, per \usd{}1 of notional at maturity $T$:
+\[
+  1 + p\,\max\!\left(\frac{F_T}{F_0}-1,\;0\right),
+  \qquad p = 0.6,
+\]
+a 9-month ATM participation on KC=F. The investor keeps the principal in
+every scenario and keeps 60\% of any rally. This decomposes by design
+into two ordinary instruments: a zero-coupon bond (the principal) plus
+$p$ calls struck at the forward $F_0$.
+\end{concept}
+
+\begin{concept}{Black-76 pricing}
+Options on futures are priced by Black's model \cite{black76}: the
+premium is the discounted expectation under the risk-neutral measure in
+which the futures is a martingale,
+\[
+  c \;=\; e^{-rT}\bigl(F\,N(d_1) - K\,N(d_2)\bigr), \qquad
+  d_1 = \frac{\ln(F/K) + \sigma^2 T/2}{\sigma\sqrt{T}}, \quad
+  d_2 = d_1 - \sigma\sqrt{T},
+\]
+with the GARCH working volatility $\sigma$ from
+Chapter~\ref{ch:dynamics} and $r$ the frozen SOFR. The premiums of both
+collar legs in Chapter~\ref{ch:hedge} come from the same formula, which
+is why a zero-premium collar is solvable at all.
+\end{concept}
+
+\begin{concept}{Worked decomposition}
+At $F_0 = 324.25$, 9-month tenor, SOFR 3.66\%: the discount bond is
+$e^{-rT} = 0.97292$; the ATM Black-76 call is 0.13128, so the
+participation piece is $0.6 \times 0.13128 = 0.07877$. Fair value:
+$0.97292 + 0.07877 = 1.05169$ per unit notional. An investor paying
+105.17\% of notional is financing 2.92 points of protection with 60\% of
+the upside.
+\end{concept}
+
+\begin{concept}{Monte Carlo as an independent check}
+The closed form assumes its own inputs; an implementation can still be
+wrong. The workbench re-prices the note with an antithetic Monte Carlo
+engine (100k paths, variance reduced by pairing each path's price with
+its mirror image): $1.051913 \pm 0.000452$, against the closed form at
+1.051689 --- a difference of $8.2\times10^{-5}$, under 2 standard errors.
+Two engines, two code paths, one answer: that two-way match is the trust
+mechanism, and it is asserted as an outcomes check in Part~II.
+\end{concept}
+
+\begin{pitfall}[One model, one premium]
+Both the collar legs and the note inherit the GARCH point estimate; there
+is no implied surface to cross-check against (no free listed coffee
+options chain). The issuer-side greeks (delta, vega) are validated by
+bump-and-reprice rather than market calibration. Parameter risk is
+declared, not eliminated.
+\end{pitfall}
+
+Regulatory placement: a note like this sold to retail in the EU would
+require a PRIIPs key information document
+(Section~\ref{sec:regulatory}); here the note is priced, never offered.
+
+\section{Counterparty risk and xVA}
+\label{ch:xva}
+
+Any issuer or dealer holding the other side of these positions carries
+credit exposure: if the counterparty defaults while the trade is in our
+favor, we recover less than full value. The junior xVA layer quantifies
+that exposure and its price.
+
+\begin{concept}{Exposure simulation: EE, EPE, PFE}
+The engine simulates the futures price under the risk-neutral measure as
+a lognormal martingale (the same assumption Black-76 prices), marks the
+book's MtM on every path, and collects, per future date $t$, the
+distribution of $\max(\text{MtM}, 0)$ --- the exposure only matters when
+we are owed money. Three summaries:
+\[
+  \mathrm{EE}(t) = \mathbb{E}\bigl[\max(\text{MtM}(t),0)\bigr],
+  \quad
+  \mathrm{EPE} = \tfrac{1}{T}\!\int_0^T \mathrm{EE}(t)\,dt,
+  \quad
+  \mathrm{PFE}_{q}(t) = q\text{-quantile of } \max(\text{MtM}(t),0).
+\]
+EPE is the average exposure (what CVA prices); PFE is the tail exposure
+(what collateral limits are set against). By construction
+$\mathrm{EE}(t) \leq \mathrm{PFE}(t)$, and the suite asserts it.
+On the 2.67-contract book: EPE \usd{}33{,}755; 1-year PFE \usd{}250{,}975.
+\end{concept}
+
+\begin{concept}{Unilateral CVA, bucketed}
+Credit valuation adjustment is the discounted expected loss from
+counterparty default, integrating exposure over time:
+\[
+  \mathrm{CVA} \;=\; \mathrm{LGD}
+  \int_0^T e^{-rt}\,\mathrm{EE}(t)\; h\, e^{-ht}\,dt,
+\]
+with default hazard $h$ (flat 3\% here) and loss given default LGD = 60\%.
+The integral is evaluated on discrete time buckets (the $h\,e^{-ht}$
+term is the per-bucket default density). On this book: \usd{}583.79.
+The same input re-quoted by QuantLib \cite{quantlib} agrees to
+$1.9\times10^{-16}$ relative --- machine-precision agreement on a
+re-derivation, the strongest single check in the suite.
+\end{concept}
+
+\begin{concept}{Netting}
+Under a netting agreement, exposure to a set of positions is the net MtM
+of the set, not the sum of gross exposures: offsetting positions cancel
+before default law looks at them. Consequence: netted CVA
+$\leq$ sum of standalone CVAs, asserted in the suite. For the roaster
+program the netting set is the futures positions across contract months.
+At desk scale this is why ISDA netting collapses multibillion gross
+exposures to a fraction.
+\end{concept}
+
+\begin{concept}{Collateral}
+Collateral --- a threshold (unsecured exposure the counterparty may build
+before posting) plus independent amounts (posting required in advance)
+--- attenuates the EE profile monotonically: every threshold unit cuts
+the tail exactly once, everywhere. Collateral limits are set against
+PFE, not EE: a limit sized on the average exposure is breached by
+half the paths. Thresholds also transform CVA, and the transform is
+directional (less unsecured exposure, less CVA) but not uniform.
+\end{concept}
+
+\begin{concept}{Wrong-way risk, read rather than modelled}
+WWR is correlation between counterparty default and exposure. Here it is
+benign by inspection: the roaster buys physical coffee and hedges long,
+so its exposure to us grows when coffee rises --- while the roaster's own
+business (it is a buyer of coffee) is stressed when coffee rises. That is
+\emph{right}-way risk for us as the issuer of the note's short call. The
+dangerous mirror is selling the participation note's upside to a producer
+long coffee: exposure and counterparty distress would then rise
+together. Modelled WWR needs a correlated default--price process; kept
+qualitative here per scope, stated as such.
+\end{concept}
+
+\begin{pitfall}[Junior xVA only]
+No DVA, FVA, or MVA; flat hazard and flat SOFR discounting. These
+omissions matter at dealer scale (funding costs of the hedge itself,
+own-default leg of the CVA). The layer is sized for a junior desk
+review, and says so.
+\end{pitfall}
+
+\section{Regulatory context}
+\label{sec:regulatory}
+
+Four regimes shape what this workbench does. Each is treated the same
+way: the problem the regime exists to solve, what it requires, and how
+the workbench maps to it --- mapped as methodology, never asserted as
+compliance, because a learner artifact has no regulatory status to
+assert.
+
+\subsection{SR 26-2: model risk management}
+
+\begin{concept}{The problem and the guidance}
+Models simplify reality; the gap between model and reality is model
+risk --- the potential for loss or bad decisions when outputs are wrong
+or misused. The US banking agencies first codified expectations in
+SR~11-7 (2011) and issued the revised guidance SR~26-2 on 2026-04-17,
+superseding SR~11-7 and the BSA/AML addendum SR~21-8 \cite{sr262}. The
+revised guidance is explicitly risk-based and tailored: it is expected
+to be most relevant to banking organizations above \usd{}30B in assets,
+and it sets no enforceable standards.
+\end{concept}
+
+\begin{concept}{What SR 26-2 actually requires}
+A \emph{model} is a quantitative method applying statistical, economic,
+or financial theory to process input data into estimates --- simple
+arithmetic and rule-based software are excluded. Requirements, by
+lifecycle stage:
+\begin{itemize}
+\item \emph{Development}: clear statement of purpose, testing out-of-sample
+  and out-of-time, sensitivity to assumptions.
+\item \emph{Validation}: (i)~\emph{conceptual soundness} --- assess the
+  design, assumptions, and judgments; (ii)~\emph{outcomes analysis} ---
+  compare model outputs to real-world outcomes (backtests, benchmarks);
+  (iii)~\emph{ongoing monitoring} --- detect performance deterioration.
+\item \emph{Governance}: roles and independence (\emph{effective
+  challenge} by qualified, objective reviewers), a comprehensive model
+  inventory, documentation adequate to understand each model's risk.
+\item \emph{Aggregate view}: risk assessed across models together ---
+  common assumptions and shared data create correlated failures.
+\item \emph{Vendor products}: third-party models are validated like
+  in-house ones.
+\end{itemize}
+\end{concept}
+
+\emph{Mapping.} The workbench reproduces the \emph{mechanics} on a small
+scale: a 13-model inventory (Part~II, Table~\ref{tab:inventory}), a
+rolling outcomes program across every model, benchmarking (GARCH vs
+EWMA, MC vs closed form, CVA vs QuantLib), fail-closed data gates, and
+hand-calculated checks in test docstrings as documentation. The posture
+is methodological fidelity: practice the discipline, claim no status.
+
+\subsection{IFRS 9: hedge accounting}
+
+\begin{concept}{The problem}
+Without hedge accounting, a hedging futures position marks to market in
+P\&L \emph{today} while the hedged purchase hits earnings \emph{later};
+earnings volatility appears purely from timing. Hedge accounting aligns
+the two by parking the effective portion of the hedge's gain or loss in
+other comprehensive income until the hedged transaction affects
+earnings.
+\end{concept}
+
+\begin{concept}{Cash-flow hedge designation and effectiveness}
+IFRS 9 \cite{ifrs9} permits designation of a forecast transaction as a
+hedged item when it is \emph{highly probable} and presents a particular
+risk. For the roaster program: highly probable forecast green-coffee
+purchases (variable price), with coffee~C price risk designated --- the
+basis between origin differentials and the exchange~C price is
+\emph{not} designated and stays in P\&L. Effectiveness is principles-based:
+there must be (i)~an economic relationship between hedged item and
+instrument, (ii)~credit risk not dominating value changes, and
+(iii)~a hedge ratio consistent with the risk-management objective ---
+the retired IAS~39 80--125\% dollar-offset band is gone. The effective
+portion accumulates in AOCI and is reclassified to P\&L in the period
+the forecast purchases affect earnings. Variation margin posted to the
+clearing house is a receivable/liability, not a hedge-accounting item.
+\end{concept}
+
+\emph{Mapping.} The program is assessed with
+\texttt{effectiveness.assess} on the hedge P\&L pairs: economic
+relationship and credit-dominance tests, boundary cases included;
+forward-starting assessments run each reporting period. The designation
+memo (conceptual, not compliance advice) documents the archetype: a
+roaster/buyer patterned on how a branded coffee company describes its
+commodity hedging in its annual report.
+
+\subsection{EMIR 3: clearing thresholds}
+
+\begin{concept}{The problem and the regime}
+After 2009, G20 commitments pushed standardized derivatives to central
+clearing and reporting; EMIR implements that in the EU. EMIR~3
+(Regulation (EU) 2024/2987, in force 24 December 2024
+\cite{emir3}) reshaped counterparty categorisation: financial
+counterparties (FC) and non-financial counterparties (NFC+, NFC-)
+are sorted by their derivative positions, and only counterparties
+exceeding \emph{clearing thresholds} are forced to clear.
+\end{concept}
+
+\begin{concept}{What changed and where this program sits}
+EMIR~3 moved the threshold calculation to \emph{uncleared OTC
+positions only} (recognizing the benefit of clearing), computed at
+entity level for NFCs, with the \emph{hedging exemption} retained:
+contracts that objectively reduce commercial risks of the counterparty
+or its group are excluded. ESMA's February~2026 final technical
+standards set the uncleared commodity and emission-allowance threshold
+at EUR~4 billion \cite{emir3rts}. This program's annual notional is
+roughly EUR~3.6M ($\approx$ 0.009\% of the threshold): the clearing
+obligation is nowhere near engaged, and the workbench's exchange-traded
+futures are cleared by construction. The mapping is directional
+context, not a classification claim.
+\end{concept}
+
+\subsection{MiFID II and PRIIPs: distribution and disclosure}
+
+A half-section because it only frames the note's boundaries. MiFID~II
+governs derivative trading and sets position limits for commodity
+derivatives (with hedging exemptions); PRIIPs (Regulation (EU)
+No~1286/2014, \cite{priips}) requires a key information document before
+any structured product is offered to a retail investor. The
+participation note in Chapter~\ref{ch:note} is priced two ways but
+offered to nobody; the KID obligation maps to zero here. Recorded so
+the boundary is explicit.
+
+\clearpage
+\part{Validation and decision: what was checked and what it decided}
+
+\section{Scope and Honest Framing}\label{sec:scope}
 
 This project extends the Citi MQA Forage simulation onto real frozen
 market data. It is a learner workbench, not a production system: no Citi
@@ -76,55 +696,28 @@ price bars, so only manifests, gate reports and executed notebooks are
 committed and the bars regenerate locally through the gated freeze. Any
 future cloud artifact is gated snapshots only.
 
-\section{Methodology Walkthrough (Phases 1--5)}
+\section{Program structure}
 
-\subsection{Data gates and MQA replication (Phase 1)}
-The coffee chain (8 contract months plus the continuous KC=F front) is
-frozen with SHA-256 manifests and count/completeness gates, with a gold
-(GC=F) fallback armed and the pipeline fail-closed: a coffee gate failure
-switches universe, a gold failure stops everything. The Forage Task~3
-methodology (forward curve, volatility, SOFR discounting) is re-run
-entirely on the frozen data; the simulation's toy numbers are labelled
-context only.
+The workbench was built in five methodology phases and two review
+phases. Part~I explains each phase's methods chapter by chapter; the
+map below links phases to deliverables for navigation.
 
-\subsection{Carry and curve calibration (Phase 2)}
-As of the frozen date (2026-09-04) the curve is backwardated across every
-consecutive spread: front implied convenience yield 40.8\%/yr decaying to
-6.3\%/yr on the back. The Schwartz--Smith (2000) two-factor fit in reduced
-form gives a mean-reversion speed $\kappa = 5.97$/yr (half-life
-$\approx 1.4$ months), an equilibrium level $\xi = 5.673$ in logs
-($e^{\xi} \approx 291$~¢/lb), and a fit RMSE far inside the pre-declared
-tolerance. GARCH(1,1) working volatility: last conditional 39.2\%/yr,
-long-run 38.5\%/yr, persistence 0.802; the EWMA ($\lambda = 0.94$)
-reference reads 47.2\%/yr. SOFR is frozen at 3.66\%.
-
-\subsection{Roaster hedge program (Phase 3)}
-The roaster's exposure (100,000~lb/month, 12 months) maps to contract
-selection with the in-or-after-month rule and a 10-day pre-expiry roll
-schedule, averaging 2.67 contracts. A long hedge plus a zero-cost collar
-(long 280 put / short 382.06 call, both priced at 7.69~¢/lb, premium gap
-$1.3\times 10^{-14}$ by construction) frames the cost band. IFRS~9
-princip-based effectiveness (economic relationship, credit-dominance,
-hedge-ratio consistency) is tested, not the retired IAS~39 80--125\%
-band; EMIR~3 NFC threshold and hedging-exemption criteria are mapped.
-
-\subsection{Structured participation note (Phase 4)}
-A capital-protected participation note on KC=F (notional \usd{}1M, 9-month
-tenor, participation $p = 0.6$, ATM) prices in closed form as a discounted
-zero plus $p$ times a Black-76 call over the reference price:
-$0.97292 + 0.07877 = 1.05169$ per unit notional. The antithetic MC engine
-(100k paths) reproduces it at $1.051913 \pm 0.000452$; the two-way
-match is the trust mechanism. Issuer-side delta/vega greeks are validated
-by bump-and-reprice MC.
-
-\subsection{Risk gates and junior xVA (Phase 5)}
-On the 2.67-contract book: daily 95\% VaR \usd{}12,900 / ES \usd{}17,615;
-99\% VaR \usd{}19,928 / ES \usd{}25,921 (ES $\geq$ VaR asserted
-everywhere). The lognormal martingale exposure engine gives
-EPE \usd{}33,755 and 1-year PFE \usd{}250,975. Bucketed unilateral CVA at
-3\% flat hazard, 60\% LGD, SOFR-flat discounting: \usd{}583.79. Netting
-and collateral transforms are asserted against their invariants (netted
-CVA $\leq$ sum of standalones; collateral attenuates EE monotonically).
+\begin{table}[h!]
+\centering\small
+\begin{tabular}{p{2.2cm}p{7.2cm}p{5.2cm}}
+\toprule
+\textbf{Phase} & \textbf{Method} & \textbf{Explained in} \\
+\midrule
+1. Data gates + MQA replication & SHA-256 manifest freeze, count/completeness gates, gold fallback, fail-closed; the Forage Task-3 methodology re-run on the frozen curve & Ch.~2 (\ref{ch:data}); outcomes in \ref{sec:validation} \\
+2. Carry \& curve calibration & Cost-of-carry identity, Schwartz--Smith fit, GARCH(1,1) vs EWMA & Ch.~3 (\ref{ch:carry}), Ch.~4 (\ref{ch:dynamics}) \\
+3. Roaster hedging program & Futures + zero-cost collar, contract selection and roll, margin funding & Ch.~5 (\ref{ch:hedge}) \\
+4. Structured note & Black-76 closed form vs antithetic Monte Carlo, bump-and-reprice greeks & Ch.~6 (\ref{ch:note}) \\
+5. Risk gates + junior xVA & EE/EPE/PFE engine, bucketed unilateral CVA, netting and collateral & Ch.~7 (\ref{ch:xva}) \\
+6. Validation harness & SR 26-2-aligned inventory, no-look-ahead gate, rolling outcomes & \ref{sec:validation} \\
+\bottomrule
+\end{tabular}
+\caption{Phase map. The decision analysis and limitations close Part~II.}
+\end{table}
 
 \section{Hand-Calculated Verification}\label{sec:handcalc}
 
@@ -190,7 +783,7 @@ finding reproducible from the package.
 
 \subsection{Model inventory}
 
-\begin{table}[h!]
+\begin{table}[h!]\label{tab:inventory}
 \centering\scriptsize
 \begin{tabular}{p{2.7cm}p{2.5cm}p{3.4cm}p{3.2cm}p{2.7cm}p{1.5cm}}
 \toprule
@@ -318,7 +911,7 @@ the collar for a margin-constrained buyer and the futures lock when
 budget certainty dominates, with the IFRS~9 cash-flow-hedge
 designation and effectiveness testing identical in structure for both.
 
-\section{Limitations}
+\section{Limitations}\label{sec:limitations}
 
 \begin{itemize}
 \item \textbf{Basis risk is not modelled.} All hedges are evaluated on the
@@ -344,5 +937,42 @@ WWR here is benign by inspection).
 per contract and the monetisable-put funding cap are stated learner
 assumptions, not exchange feeds.
 \end{itemize}
+\begin{thebibliography}{13}
+\bibitem{black76} Black, F. (1976). The pricing of commodity contracts.
+\emph{Journal of Financial Economics} 3(1--2), 167--179.
+\bibitem{bollerslev86} Bollerslev, T. (1986). Generalized autoregressive
+conditional heteroskedasticity. \emph{Journal of Econometrics} 31(3),
+307--327.
+\bibitem{sr262} Board of Governors of the Federal Reserve System, OCC, and
+FDIC (2026). \emph{Supervisory Guidance on Model Risk Management},
+SR~26-2 attachment, April 17, 2026.
+\bibitem{ifrs9} International Accounting Standards Board (2014, as
+amended). \emph{IFRS 9 Financial Instruments}, Section~6, Hedge
+Accounting. IFRS Foundation.
+\bibitem{emir3} European Union (2024). Regulation (EU) 2024/2987 (EMIR~3),
+amending Regulation (EU) No~648/2012, in force 24 December 2024.
+\bibitem{emir3rts} European Securities and Markets Authority (2026).
+\emph{Final Report on draft RTS amending Commission Delegated Regulation
+(EU) No~149/2013 to further detail the new EMIR clearing thresholds
+regime}, ESMA74-1049116226-944, February 2026.
+\bibitem{priips} European Union (2014). Regulation (EU) No~1286/2014 on
+key information documents (PRIIPs).
+\bibitem{riskmetrics96} RiskMetrics Group (1996). \emph{RiskMetrics
+Technical Document}, 4th edition. J.P.~Morgan/Reuters, New York.
+\bibitem{kupiec95} Kupiec, P.~H. (1995). Techniques for verifying the
+accuracy of risk measurement models. \emph{Journal of Derivatives}
+3(2), 73--84.
+\bibitem{schwartzsmith00} Schwartz, E.~S., and Smith, J.~E. (2000).
+Short-term variations and long-term dynamics in commodity prices.
+\emph{Management Science} 46(7), 893--911.
+\bibitem{hull} Hull, J.~C. \emph{Options, Futures, and Other Derivatives}.
+Pearson (multiple editions).
+\bibitem{quantlib} QuantLib contributors. \emph{QuantLib: a free/open-source
+library for quantitative finance}. \url{https://www.quantlib.org}.
+\bibitem{fredsofr} Federal Reserve Bank of St.\ Louis (2026). Secured
+Overnight Financing Rate (SOFR), series SOFR. FRED.
+\url{https://fred.stlouisfed.org/series/SOFR}.
+\end{thebibliography}
 
 \end{document}
+
