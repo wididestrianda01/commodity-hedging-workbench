@@ -5,7 +5,7 @@ twelve months. Coffee can move 40% in a year; the roaster's margin cannot.
 This workbench prices and hedges that purchase program on real frozen market
 data. It extends the [Citi Markets Quantitative Analysis Forage
 simulation](https://www.theforage.com/simulations/citi/global-quantitative-analysis-analyst-6b4m)
-— an interview-practice simulation — onto a live-shaped desk workflow: frozen
+onto a live-shaped desk workflow: frozen
 futures curves, carry calibration, a hedge program, a structured note, and a
 counterparty-risk layer, every number regenerated from gated public data.
 
