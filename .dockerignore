@@ -1,0 +1,8 @@
+.git
+.scratch
+notebooks
+report
+tests
+memos
+interview-brief.md
+**/__pycache__

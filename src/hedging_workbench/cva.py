@@ -50,3 +50,30 @@ def cva_unilateral(
     s_prev = np.concatenate([[1.0], survival(tenors[:-1], hazard)])
     ds = s_prev - survival(tenors, hazard)
     return float(lgd * np.sum(ee * discount(tenors, r) * ds))
+
+
+def cva_quantlib(
+    ee: np.ndarray, tenors: np.ndarray, hazard: float, lgd: float, r: float
+) -> float:
+    """Same buckets priced through QuantLib's FlatHazardRate/FlatForward
+    curves. Convention benchmark, not a different model: identical
+    discretisation, so agreement certifies OUR survival/discount/pairing
+    conventions (notebook 04). Requires the QuantLib package.
+    """
+    try:
+        import QuantLib as ql
+    except ImportError as e:  # pragma: no cover
+        raise ImportError(
+            "pip install QuantLib-Python to run the benchmark"
+        ) from e
+    ee = np.asarray(ee, dtype=float)
+    tenors = np.asarray(tenors, dtype=float)
+    ql.Settings.instance().evaluationDate = ql.Date(
+        4, ql.September, 2026
+    )  # frozen curve date
+    cal, dc = ql.NullCalendar(), ql.Actual365Fixed()
+    hzc = ql.FlatHazardRate(0, cal, ql.QuoteHandle(ql.SimpleQuote(hazard)), dc)
+    dfc = ql.FlatForward(0, cal, ql.QuoteHandle(ql.SimpleQuote(r)), dc)
+    s_ql = np.array([hzc.survivalProbability(t) for t in tenors])
+    df_ql = np.array([dfc.discount(t) for t in tenors])
+    return float(lgd * np.sum(ee * df_ql * (np.r_[1.0, s_ql[:-1]] - s_ql)))

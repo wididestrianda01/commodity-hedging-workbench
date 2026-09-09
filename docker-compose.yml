@@ -1,0 +1,15 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    ports:
+      - "8501:8501"
+
+  # Local AWS emulator (floci-io/floci, MIT) — permanent gate-test fixture.
+  # Phase 8's Terraform pipeline deploys against this endpoint; nothing here
+  # ever leaves the machine.
+  floci:
+    image: floci/floci:latest
+    ports:
+      - "4566:4566"

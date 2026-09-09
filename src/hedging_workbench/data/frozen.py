@@ -52,6 +52,11 @@ def _manifest_path(name: str) -> str:
     return f"manifest_{name}.json"
 
 
+def manifest(name: str, frozen_dir: Path = FROZEN_DIR) -> dict:
+    """Frozen manifest content: files, sha256s, as-of (app gate panel)."""
+    return _load_manifest(frozen_dir, name)
+
+
 def _load_manifest(frozen_dir: Path, name: str) -> dict:
     return json.loads((frozen_dir / _manifest_path(name)).read_text())
 

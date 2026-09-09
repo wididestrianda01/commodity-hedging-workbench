@@ -11,10 +11,10 @@ dependencies = ["pandas>=2.2", "numpy>=1.26", "scipy>=1.13", "yfinance>=0.2.50",
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "jupyter", "nbformat", "nbconvert", "ipykernel"]
+app = ["streamlit>=1.40", "QuantLib>=1.35"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "app"]
