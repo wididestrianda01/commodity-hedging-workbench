@@ -25,3 +25,6 @@ data/frozen/GC*.csv
 report/*.aux
 report/*.log
 report/*.out
+
+# Licensed source data: FRED prohibits stored copies given to third parties.
+data/frozen/SOFR.csv
